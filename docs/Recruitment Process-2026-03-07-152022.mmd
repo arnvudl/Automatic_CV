@@ -1,0 +1,133 @@
+flowchart TD
+    %% ─── SOURCES D'ENTRÉE ───────────────────────────────────────
+    EMAIL["📧 Email IMAP : recrutement@entreprise.com"]
+    FORM["🌐 Formulaire Web : Webhook POST"]
+    UPLOAD["📁 Upload Direct : API multipart"]
+
+    %% ─── N8N ────────────────────────────────────────────────────
+    N8N["⚡ n8n
+    Orchestration automatique
+    Extraction pièce jointe + job_id"]
+
+    %% ─── PIPELINE ───────────────────────────────────────────────
+    P1["01 · INGESTION
+    pdfminer · python-docx · OCR
+    ─────────────────
+    JSON brut extrait"]
+    P2["02 · NLP / NER
+    spaCy fr_core_news_lg fine-tuné
+    ─────────────────
+    Entités : compétences, rôles,
+    diplômes, dates, organisations"]
+    P3["03 · ANONYMISATION
+    Microsoft Presidio
+    ─────────────────
+    Masquage RGPD · ID pseudonymisé"]
+    P4["04 · SCORE OBJECTIF
+    Moteur règles métier (JSON config)
+    ─────────────────
+    Score /100 · Filtre seuil minimum"]
+    P5["05 · ML MAISON
+    XGBoost par entreprise
+    ─────────────────
+    Fit culturel · SHAP values"]
+    P6["06 · AUDIT BIAIS
+    Fairlearn · Disparate Impact Ratio
+    ─────────────────
+    Override si biais détecté"]
+
+    %% ─── DÉCISION ───────────────────────────────────────────────
+    DECISION{"Score final
+    + ML fit"}
+
+    %% ─── DESTINATIONS ───────────────────────────────────────────
+    SHORTLIST["🟢 SHORTLIST
+    Entretien recommandé"]
+    REVIEW["🟡 À EXAMINER
+    Revue recruteur"]
+    REJECTED["🔴 REFUSÉ
+    Hors critères"]
+    MANUAL["⚠️ RÉVISION MANUELLE
+    Erreur parsing"]
+
+    %% ─── STOCKAGE ───────────────────────────────────────────────
+    DB[("🗄️ Supabase
+    PostgreSQL + pgvector
+    ─────────────────
+    candidates · jobs · audit_logs")]
+
+    %% ─── NOTIFICATIONS ──────────────────────────────────────────
+    SLACK["💬 Slack RH
+    Résumé + score + lien"]
+    MAIL["✉️ Email candidat
+    (optionnel)"]
+
+    %% ─── DASHBOARD ──────────────────────────────────────────────
+    DASH["📊 Dashboard React
+    Classement · Scores détaillés
+    Audit biais · Export CSV/PDF"]
+
+    %% ─── ML RETRAINING ──────────────────────────────────────────
+    RETRAIN["🔄 Re-entraînement
+    Tous les 6 mois
+    nouvelles données client"]
+
+    %% ─── CONNEXIONS ─────────────────────────────────────────────
+    EMAIL --> N8N
+    FORM  --> N8N
+    UPLOAD --> N8N
+
+    N8N --> P1
+    P1 --> P2
+    P2 --> P3
+    P3 --> P4
+
+    P4 -->|"score < seuil"| REJECTED
+    P4 -->|"score ≥ seuil"| P5
+    P5 --> P6
+    P6 --> DECISION
+
+    DECISION -->|"fit ≥ 0.70"| SHORTLIST
+    DECISION -->|"fit < 0.70"| REVIEW
+
+    SHORTLIST --> DB
+    REVIEW    --> DB
+    REJECTED  --> DB
+    MANUAL    --> DB
+
+    N8N -->|"erreur parsing"| MANUAL
+
+    SHORTLIST --> SLACK
+    REVIEW    --> SLACK
+    REJECTED  --> MAIL
+
+    DB --> DASH
+    DB --> RETRAIN
+    RETRAIN -->|"modèle mis à jour"| P5
+
+    %% ─── STYLES ─────────────────────────────────────────────────
+    classDef source   fill:#1e1b4b,stroke:#6366f1,color:#a5b4fc
+    classDef n8n      fill:#2d0a1a,stroke:#f43f5e,color:#fda4af
+    classDef pipeline fill:#0a1628,stroke:#2e75b6,color:#7dd3fc
+    classDef decision fill:#1c1400,stroke:#f59e0b,color:#fcd34d
+    classDef good     fill:#0a1f14,stroke:#22c55e,color:#86efac
+    classDef neutral  fill:#1a1200,stroke:#f59e0b,color:#fcd34d
+    classDef bad      fill:#1f0a0a,stroke:#ef4444,color:#fca5a5
+    classDef manual   fill:#1a0a2e,stroke:#8b5cf6,color:#c4b5fd
+    classDef db       fill:#0a1f14,stroke:#10b981,color:#6ee7b7
+    classDef notify   fill:#0c1a2e,stroke:#0ea5e9,color:#7dd3fc
+    classDef dash     fill:#0d1424,stroke:#6366f1,color:#a5b4fc
+    classDef retrain  fill:#1a1200,stroke:#f59e0b,color:#fcd34d
+
+    class EMAIL,FORM,UPLOAD source
+    class N8N n8n
+    class P1,P2,P3,P4,P5,P6 pipeline
+    class DECISION decision
+    class SHORTLIST good
+    class REVIEW neutral
+    class REJECTED bad
+    class MANUAL manual
+    class DB db
+    class SLACK,MAIL notify
+    class DASH dash
+    class RETRAIN retrain
