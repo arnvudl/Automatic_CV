@@ -1,0 +1,40 @@
+Name: Marcus Liu
+Gender: Male
+Date of Birth: 1987-11-02
+Address: 19 Hawthorne Drive, Austin, TX 78745, USA
+Email: [marcus.liu87@email.com](mailto:marcus.liu87@email.com)
+Phone: +1-555-673-9921
+Target Role: Operations Manager
+
+Professional Summary:
+Operations manager with 12 years of experience in logistics and supply chain optimization.
+Strong background in process improvement and cost control.
+Effective leader focused on performance and continuous improvement.
+
+Education:
+Bachelor of Business Administration — Supply Chain Management — University of Texas at Austin — 2010
+
+Experience:
+Logistics Coordinator — Lone Star Distribution — Austin, TX — 2010-06 to 2014-03
+
+* Reduced transportation costs by 12% through route optimization.
+* Coordinated daily shipments and inventory tracking.
+* Implemented vendor performance monitoring system.
+
+Operations Manager — Central Freight Solutions — Austin, TX — 2014-04 to 2025-11
+
+* Improved warehouse productivity by 22% within two years.
+* Managed a team of 35 staff across logistics and procurement.
+* Oversaw annual operating budget of $8M.
+
+Skills:
+Technical: SAP ERP, Microsoft Excel, Power BI, Oracle SCM
+Methods: Lean management, Process mapping, Demand forecasting, Inventory control
+Management: Budgeting, Team supervision, Performance management
+
+Languages:
+English — C2
+Mandarin — C1
+
+Certifications:
+Certified Supply Chain Professional — 2015

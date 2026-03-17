@@ -1,0 +1,40 @@
+Name: Hannah Schneider
+Gender: Female
+Date of Birth: 1993-07-25
+Address: 88 Lindenstraße, 50674 Cologne, Germany
+Email: [hannah.schneider93@email.com](mailto:hannah.schneider93@email.com)
+Phone: +49-555-483-2291
+Target Role: Software Engineering Lead
+
+Professional Summary:
+Software engineer with 9 years of experience in backend development and system architecture.
+Specialized in scalable cloud-native applications.
+Passionate about mentoring teams and driving technical excellence.
+
+Education:
+Master of Science — Computer Science — University of Bonn — 2016
+
+Experience:
+Software Developer — RheinTech Systems — Cologne, Germany — 2016-09 to 2020-12
+
+* Enhanced application performance by 30% through microservices migration.
+* Developed RESTful APIs for enterprise clients.
+* Contributed to CI/CD pipeline implementation.
+
+Senior Software Engineer — CloudCore Solutions — Cologne, Germany — 2021-01 to Present
+
+* Led architecture redesign reducing system downtime by 15%.
+* Managed a team of 6 engineers in agile sprints.
+* Oversaw cloud infrastructure deployment on AWS.
+
+Skills:
+Technical: Java, Kotlin, Docker, Kubernetes, AWS
+Methods: Microservices architecture, Test-driven development, Agile Scrum, DevOps practices
+Management: Technical mentoring, Sprint planning, Resource allocation
+
+Languages:
+German — C2
+English — C1
+
+Certifications:
+AWS Certified Solutions Architect — 2022
