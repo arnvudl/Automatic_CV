@@ -1,24 +1,53 @@
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
+import logging
 
-app = FastAPI(title="CV API - Test n8n")
+# Configuration du logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("cv_api")
+
+app = FastAPI(title="Automatic CV API", version="0.1.0")
+
+# Sécurisation CORS : On restreint l'accès à ton domaine n8n
+# En production, ne jamais laisser ["*"]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://n8n.lony.app"],
+    allow_methods=["POST", "GET"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/")
+async def root():
+    return {"status": "online", "message": "API prêt pour n8n"}
 
 
 @app.post("/api/v1/candidates")
 async def receive_cv(
         file: UploadFile = File(...),
         filename: str = Form(...),
-        from_email: str = Form(..., alias="from")  # 'from' est un mot réservé en Python
+        from_email: str = Form(..., alias="from")
 ):
-    # Lecture basique pour confirmer la réception en log
-    content = await file.read()
-    size_kb = len(content) / 1024
+    try:
+        content = await file.read()
 
-    print(f"📥 CV reçu : {filename} venant de {from_email} ({size_kb:.2f} KB)")
+        logger.info(f"✅ CV REÇU : {filename}")
+        logger.info(f"📧 EXPÉDITEUR : {from_email}")
 
-    # On renvoie le statut attendu par le Switch de n8n
-    return {
-        "candidate_id": "test_12345",
-        "filename": filename,
-        "from": from_email,
-        "status": "awaiting_review"
-    }
+        # Simulation du succès pour le test de workflow
+        return {
+            "status": "awaiting_review",
+            "candidate_id": "cand_dev_test",
+            "filename": filename,
+            "message": "Intégration réussie."
+        }
+
+    except Exception as e:
+        logger.error(f"❌ Erreur : {str(e)}")
+        raise HTTPException(status_code=500, detail="Erreur interne")
+
+
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
