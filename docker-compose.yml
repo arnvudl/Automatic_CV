@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cv_api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      # Permet à l'API et au pipeline d'accéder au dossier data/
+      - ./data:/app/data
+    restart: unless-stopped
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n
+    container_name: cv_n8n
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=n8n.lony.app
+      - WEBHOOK_URL=https://n8n.lony.app/
+    volumes:
+      - n8n_data:/home/node/.n8n
+    restart: unless-stopped
+    depends_on:
+      - api
+
+volumes:
+  n8n_data:
