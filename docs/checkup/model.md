@@ -8,140 +8,127 @@
 
 ### Données d'entrée
 
-- **Source** : `data/processed/features.csv` — 205 CV synthétiques (TechCore, contexte fictif)
-- **Labels** : pseudo-labels générés par scoring heuristique (`pipeline_ml/pseudo_labels.py`)
-- **Distribution** : 103 invités (1) / 102 rejetés (0) — parfaitement équilibré (50/50)
-- **Valeurs manquantes** : 0
+- **Source** : `data/processed/features.csv` — 205 CVs parsés (200 avec labels réels)
+- **Labels** : vrais labels recruteur depuis `pipeline_ml/student_labels.csv` (200 labels)
+- **5 CVs sans label** (cv1–cv5, absents de student_labels.csv) — ignorés à l'entraînement
+- **Distribution** : 51 invités (1) / 149 rejetés (0) — ratio 25/75 (déséquilibré, réel)
 - **Données sensibles dans le modèle** : aucune — `age`, `gender`, `nom`, `email`, `téléphone` sont dans `identities.csv` uniquement
 
-### Features utilisées (16 colonnes)
+### Features utilisées (19 colonnes)
+
+#### Features brutes
 
 | Feature | Type | Description |
 |---|---|---|
-| `education_level` | Ordinal (1–4) | 1=sans diplôme, 2=Bachelor, 3=Master, 4=PhD |
-| `nb_jobs` | Entier | Nombre de postes |
 | `years_experience` | Float | Années d'expérience cumulées |
-| `avg_job_duration` | Float | Durée moyenne par poste |
-| `career_progression` | Binaire | Progression détectée (senior + changement d'entreprise) |
-| `nb_technical_skills` | Entier | Nombre de compétences techniques |
-| `nb_methods_skills` | Entier | Nombre de méthodes |
-| `nb_management_skills` | Entier | Nombre de compétences management |
-| `total_skills` | Entier | Somme des 3 précédents |
-| `nb_languages` | Entier | Nombre de langues |
-| `has_english` | Binaire | Anglais présent |
-| `english_level` | Ordinal (0–6) | Niveau CECRL (A1=1 … C2=6) |
-| `has_french` | Binaire | Français présent |
-| `has_german` | Binaire | Allemand présent |
-| `has_luxembourgish` | Binaire | Luxembourgeois présent |
+| `avg_job_duration` | Float | Durée moyenne par poste (stabilité) |
+| `education_level` | Ordinal (1–4) | 1=sans diplôme, 2=Bachelor, 3=Master, 4=PhD |
+| `nb_jobs` | Entier | Nombre de postes occupés |
+| `nb_methods_skills` | Entier | Nombre de méthodes (Agile, Scrum…) |
+| `nb_languages` | Entier | Nombre de langues parlées |
 | `nb_certifications` | Entier | Nombre de certifications |
+| `english_level` | Ordinal (0–6) | Niveau CECRL anglais (A1=1 … C2=6) |
+| `has_german` | Binaire | Allemand présent |
+| `nb_technical_skills` | Entier | Nombre de compétences techniques |
 
-### Split
+#### Features engineered (`pipeline_ml/feature_engineering.py`)
 
-| Set | Taille | % |
+| Feature | Formule | Corrélation avec label |
 |---|---|---|
-| Train | 131 | 64% |
-| Validation | 33 | 16% |
-| Test | 41 | 20% |
+| `log_years_exp` | log1p(years_experience) | atténue outliers seniors |
+| `exp_edu_score` | years × education_level | **r=+0.364** — meilleur signal |
+| `cert_density` | nb_certifications / nb_jobs | certifications par poste |
+| `multilingual_score` | nb_languages + bonus anglais B2+ | signal langue composite |
+| `method_tech_ratio` | nb_methods / nb_technical | équilibre profil |
+| `tech_per_year` | nb_technical / years | **r=−0.243** — détecte CV gonflés |
+| `career_depth` | years × avg_job_duration | **r=+0.257** — séniorité stable |
+| `is_it` | secteur == "IT" | one-hot secteur |
+| `is_finance` | secteur == "Finance" | one-hot secteur |
 
-Split stratifié (`stratify=y`) — proportions 50/50 conservées dans chaque set.
+### Split stratifié
+
+| Set | Taille | Invités | Rejetés |
+|---|---|---|---|
+| Train | ~128 | ~33 | ~95 |
+| Validation | ~32 | ~8 | ~24 |
+| Test | 40 | 10 | 30 |
+
+Split 64/16/20 avec `stratify=y` — ratio 25/75 conservé dans chaque set.
 
 ---
 
-## 2. Résultats
-
-### Cross-validation sur train (5-fold, F1)
-
-| Modèle | F1 moyen | Écart-type |
-|---|---|---|
-| Régression Logistique | 0.820 | ± 0.029 |
-| Random Forest | 0.878 | ± 0.065 |
-| XGBoost | 0.875 | ± 0.092 |
+## 2. Résultats (labels réels, Avril 2026)
 
 ### Test set (données jamais vues)
 
 | Modèle | F1 | ROC-AUC |
 |---|---|---|
-| Régression Logistique | 0.810 | **0.948** |
-| **Random Forest** | **0.837** | 0.924 |
-| XGBoost | 0.837 | 0.943 |
+| **Régression Logistique** | **0.621** | **0.837** |
+| Random Forest | 0.267 | 0.727 |
+| XGBoost | 0.333 | 0.640 |
 
-**Modèle retenu : Random Forest** (meilleur F1 test, variance CV correcte).
+**Modèle retenu : Régression Logistique** — meilleur F1 et AUC, plus stable sur petit dataset.
 
-### Confusion matrix — Random Forest (test set, 41 CV)
+### Pourquoi pas Random Forest ou XGBoost ?
 
-```
-                 Prédit Rejeté   Prédit Invité
-Réel Rejeté          16               4
-Réel Invité           3              18
-```
+Random Forest et XGBoost sont trop complexes pour 200 exemples : ils sur-apprennent facilement les patterns du train set sans généraliser. La Régression Logistique est plus robuste avec peu de données, s'améliore linéairement à mesure que les données augmentent, et produit des probabilités calibrées — indispensable pour le score recruteur.
 
-- 4 faux positifs (rejetés classés invités) — cas où le modèle est trop optimiste
-- 3 faux négatifs (invités classés rejetés) — cas où le modèle rate un bon profil
+### Interprétation honnête
 
-Dans un contexte recrutement, **les faux négatifs sont plus coûteux** (on rate un bon candidat). À surveiller en production.
+- F1=0.621 reflète la **vraie difficulté** du problème avec de vrais labels bruités (vs pseudo-labels qui donnaient F1=0.837)
+- AUC=0.837 indique que le modèle **classe correctement** invités vs rejetés dans 84% des paires
+- Les scores progresseront avec plus de données — amélioration attendue dès 300–400 CVs labellisés
 
 ---
 
-## 3. Interprétation honnête des résultats
+## 3. Gestion du déséquilibre de classes
 
-### Ce qui explique les bons scores
+25% invités / 75% rejetés → sans correction, le modèle prédirait "rejeté" par défaut.
 
-Le modèle apprend à reproduire les règles du scoring heuristique, pas à prédire le comportement réel d'un recruteur. C'est attendu et voulu à ce stade — c'est le principe du bootstrapping.
-
-La Régression Logistique obtient un ROC-AUC de **0.948**, ce qui indique que les features sont **linéairement bien séparables**. C'est logique : les pseudo-labels ont été calculés avec une somme pondérée des mêmes features. Le modèle retrouve essentiellement cette fonction de scoring.
-
-### Ce que ces scores ne garantissent pas
-
-- **Pas de généralisation sur de vrais CV** : les CVs sont synthétiques et uniformément bien structurés. En production, les CVs seront bruités, mal formatés, avec des champs manquants.
-- **Pas de validité prédictive réelle** : un F1 de 0.837 mesure la capacité à reproduire les pseudo-labels, pas à prédire les décisions réelles d'un recruteur.
-- **Overfitting potentiel** : Random Forest avec 200 arbres sur 131 exemples — le modèle est surdimensionné pour la taille du dataset. En production avec peu de données, préférer la Régression Logistique (plus robuste, variance plus faible).
-
-### Ce qu'on attend lors du passage aux vrais labels
-
-Quand les recruteurs valideront/rejetteront de vrais candidats :
-1. Les scores F1 vont **baisser** — les vrais labels sont plus bruités que les pseudo-labels
-2. Puis **remonter progressivement** au fil des retours — c'est le signe que le modèle apprend quelque chose de réel
-3. L'écart entre pseudo-labels et vrais labels indiquera quelles règles métier étaient fausses ou incomplètes
+Solution : `class_weight='balanced'` dans la Régression Logistique — pénalise davantage les erreurs sur la classe minoritaire (invités).
 
 ---
 
-## 4. Fichiers produits
+## 4. Conformité RGPD & AI Act
+
+- `gender` et `age` **absents** des features du modèle — monitoring biais uniquement
+- `heuristic_score` conservé dans `features.csv` : score avant seuil pour contestation humaine
+- Chaque décision finale reste humaine — le modèle produit un score, jamais une décision
+- SHAP disponible via `pipeline_ml/audit.py` pour explicabilité au recruteur
+
+---
+
+## 5. Fichiers produits
 
 | Fichier | Contenu |
 |---|---|
-| `models/model.pkl` | Random Forest entraîné (joblib) |
+| `models/model.pkl` | Régression Logistique entraînée (joblib) |
 | `models/scaler.pkl` | StandardScaler fitté sur train |
-| `models/feature_cols.pkl` | Liste ordonnée des 16 features |
+| `models/feature_cols.pkl` | Liste ordonnée des 19 features |
 | `reports/evaluation.txt` | Métriques du test set |
+| `reports/audit.txt` | Audit biais + SHAP |
 
 Pour scorer un nouveau CV :
 ```python
 import joblib, numpy as np
 
-model       = joblib.load("models/model.pkl")
+model        = joblib.load("models/model.pkl")
+scaler       = joblib.load("models/scaler.pkl")
 feature_cols = joblib.load("models/feature_cols.pkl")
 
-# features_dict = résultat de parse_cv() sur un nouveau CV
 X = np.array([[features_dict[col] for col in feature_cols]])
-score = model.predict_proba(X)[0][1]  # probabilité d'invitation (0.0–1.0)
+score = model.predict_proba(scaler.transform(X))[0][1]  # 0.0–1.0
 ```
 
 ---
 
-## 5. Prochaines étapes
+## 6. Prochaines étapes (Phase 4 & 5)
 
-### Phase 4 — Audit biais (prioritaire avant production)
+- **Calibration Platt Scaling** : améliorer la fiabilité des probabilités pour le dashboard
+- **Encodage sémantique `target_role`** : feature texto actuellement ignorée
+- **Ré-entraînement automatique** dès 50 nouveaux vrais labels
+- **Données supplémentaires** en cours (professeur) — amélioration attendue avec 300+ CVs
 
-Croiser les prédictions du modèle avec `identities.csv` (genre, âge) pour calculer :
-- **Disparate Impact Ratio** par genre : taux d'invitation femmes / taux d'invitation hommes (objectif >= 0.80, cible > 0.95)
-- **Demographic Parity Difference** via Fairlearn (objectif proche de 0)
+---
 
-Le modèle n'utilise pas `gender` comme feature, mais il peut quand même être biaisé indirectement si certaines features corrèlent avec le genre dans les données.
-
-### Phase 4 — Explicabilité SHAP
-
-Calculer les SHAP values pour chaque prédiction afin d'expliquer au recruteur quelles features ont le plus contribué au score. Obligation d'explicabilité AI Act.
-
-### Collecte de vrais labels
-
-Dès les premières candidatures réelles, logger les décisions des recruteurs et les associer aux `cv_id`. Ces vrais labels remplaceront progressivement les pseudo-labels pour réentraîner le modèle.
+*Pipeline complet : `python pipeline_ml/run.py full`*

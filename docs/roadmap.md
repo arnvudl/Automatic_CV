@@ -5,10 +5,10 @@
 | Phase | Objectif | Statut |
 |-------|----------|--------|
 | 1 | Infrastructure & automatisation n8n | ✅ Terminé |
-| 2 | Pré-traitement des données (parsing, anonymisation, hard filters) | 🔄 En cours |
-| 3 | Entraînement du modèle ML | 📅 Planifié |
-| 4 | Dashboard RH + audit biais + conformité | 📅 Planifié |
-| 5 | Tests, client pilote, documentation finale | 📅 Planifié |
+| 2 | Pré-traitement des données (parsing, anonymisation, feature engineering) | ✅ Terminé |
+| 3 | Entraînement du modèle ML + audit biais + SHAP | ✅ Terminé |
+| 4 | Dashboard RH + conformité + intégration n8n → ML | 🔄 En cours |
+| 5 | Tests, données supplémentaires, client pilote, documentation finale | 📅 Planifié |
 
 ---
 
@@ -24,63 +24,69 @@
 
 ---
 
-## Phase 2 — Pré-traitement des données 🔄
+## Phase 2 — Pré-traitement des données ✅
 
-C'est la phase en cours. L'objectif est de préparer les données pour entraîner le modèle ML, en respectant le cadre RGPD et AI Act.
+**Terminé.** Pipeline de parsing, pseudonymisation et feature engineering opérationnel.
 
-Les CV bruts se trouvent dans `data/raw/`. Le parser de base (`pipeline_ml/extraction_cv.py`) est déjà fonctionnel.
+### Ce qui a été fait
 
-### 2.1 Parsing (extraction des features)
+**Parsing** (`pipeline_ml/parse_cv.py`)
+- 205 CVs `.txt` parsés en parallèle (ThreadPoolExecutor)
+- Séparation RGPD stricte : `features.csv` (ML) + `identities.csv` (données sensibles)
+- `cv_id` UUID déterministe par candidat
+- Colonne `profile_type` (junior / intermediate / senior) pour filtre dashboard
+- Labels chargés depuis `pipeline_ml/student_labels.csv` (200 labels réels)
 
-Extraire les données structurées depuis les CV texte (`.txt`, `.pdf`).
+**Feature engineering** (`pipeline_ml/feature_engineering.py`)
+- 9 features composites ajoutées : `log_years_exp`, `exp_edu_score`, `cert_density`, `multilingual_score`, `method_tech_ratio`, `tech_per_year`, `career_depth`, `is_it`, `is_finance`
+- `exp_edu_score` (r=+0.364) meilleure corrélation avec le label
+- `tech_per_year` (r=-0.243) détecte les CV gonflés en skills
 
-- Utiliser `pipeline_ml/extraction_cv.py` comme base (Regex, rapide, sans coût de calcul)
-- Features à extraire : `nb_jobs`, `years_experience`, `education_level`, `skills`, `languages`
-- **Ne pas extraire** pour le modèle : `gender`, `age`, `nom`, `prénom`, `nationalité` — données sensibles exclues du ML (voir §RGPD)
-- Output : fichier CSV structuré `data/processed/features.csv`
-
-### 2.2 Anonymisation / Pseudonymisation
-
-Le modèle ML ne doit jamais voir les données d'identité.
-
-- Générer un `cv_id` (UUID) par candidat dès l'ingestion
-- Séparer en deux flux :
-  - **Identités** (`cv_id`, `nom`, `email`, `téléphone`) → stockées séparément, jamais envoyées au modèle
-  - **Features** (`cv_id`, features extraites) → seules données vues par le ML
-- Les données sensibles (`gender`, `age`) sont stockées uniquement à des fins de monitoring biais, jamais comme input du modèle
-
-### 2.3 Hard Filters (critères minimums)
-
-Filtre déterministe appliqué **avant** le ML, pour rejeter les profils manifestement hors critères sans solliciter le modèle.
-
-Exemples de règles :
-- Expérience < 2 ans → non éligible
-- Aucune compétence requise présente → non éligible
-- CV illisible / parsing échoué → revue manuelle
-
-**Important (RGPD)** : un rejet issu du hard filter est toujours soumis à révision humaine avant notification. Il ne s'agit pas d'un rejet automatique définitif.
+**Note** : les hard filters ont été abandonnés — avec un modèle ML, les rejets sont gérés par le score + révision humaine, conformément à l'AI Act.
 
 ---
 
-## Phase 3 — Entraînement du modèle ML 📅
+## Phase 3 — Entraînement du modèle ML ✅
 
-Une fois les données pré-traitées et validées.
+**Terminé.** Modèle entraîné sur 200 CVs avec labels réels.
 
-- Entraîner un modèle (Régression Logistique ou Random Forest en premier, XGBoost ensuite)
-- Entrée : features anonymisées du CSV `data/processed/features.csv`
-- Sortie : score de compatibilité (probabilité, pas une décision binaire)
-- Export : `model.pkl` (joblib) intégré dans le conteneur FastAPI
-- Audit biais : vérifier le ratio d'acceptation par groupe (genre, âge) via Fairlearn
+### Résultats (Avril 2026)
+
+| Modèle | F1 (test) | ROC-AUC |
+|---|---|---|
+| **Régression Logistique** | **0.621** | **0.837** |
+| Random Forest | 0.267 | 0.727 |
+| XGBoost | 0.333 | 0.640 |
+
+- Dataset : 200 CVs labellisés (51 invités / 149 rejetés, ratio 25/75)
+- 5 CVs sans label ignorés (`cv1` à `cv5`, hors `student_labels.csv`)
+- Modèle retenu : **Régression Logistique** (meilleur F1 + AUC, plus stable sur petit dataset)
+- Scores limités par la taille du dataset — amélioration attendue avec données supplémentaires
+
+### Audit biais
+
+- Parité genre : DI = 0.992 ✅
+- Parité âge : DI = 0.312 — structurel (juniors ont moins d'expérience), Equal Opportunity OK
+- SHAP global disponible dans `reports/audit.txt`
+- Voir `docs/checkup/model_audit.md` pour l'analyse complète
 
 ---
 
-## Phase 4 — Dashboard RH + Conformité 📅
+## Phase 4 — Dashboard RH + Conformité 🔄
 
-- Interface recruteur : classement par score, explications (SHAP), actions manuelles
-- Le recruteur peut corriger ou rejeter toute suggestion du modèle
-- Traçabilité : qui a revu quoi, quand, avec quel motif (log immuable)
-- Rapport biais périodique exportable
-- Voie de contestation candidat (demande de révision humaine)
+En cours. Frontend développé par un autre groupe.
+
+**Côté pipeline (à faire) :**
+- Intégration n8n → endpoint de scoring FastAPI (Nœud 6)
+- Calibration des probabilités (Platt Scaling)
+- Encodage sémantique de `target_role`
+- Ré-entraînement automatique dès 50 nouveaux vrais labels
+
+**Dashboard (autre groupe) :**
+- Classement par score avec filtre `profile_type` (junior / intermediate / senior)
+- Explications SHAP par candidat
+- Actions manuelles recruteur (override, motif)
+- Rapport biais exportable
 
 ---
 

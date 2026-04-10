@@ -1,4 +1,4 @@
-# Audit du modèle ML — CV-Intelligence v3
+# Audit du modèle ML — CV-Intelligence
 
 *TechCore Liège — Avril 2026*
 
@@ -20,21 +20,22 @@
 
 ## 1. Choix du modèle et justification
 
-Trois modèles ont été comparés : Régression Logistique, Random Forest, XGBoost.
+Trois modèles ont été comparés : Régression Logistique, Random Forest, XGBoost.  
+Entraîné sur **200 CVs avec labels réels** (51 invités / 149 rejetés, ratio 25/75).
 
-**Random Forest a été retenu.**
+**Régression Logistique retenue.**
 
-| Modèle | F1 (CV train) | F1 (test) | ROC-AUC | Variance CV |
-|---|---|---|---|---|
-| Régression Logistique | 0.879 ± 0.100 | 0.913 | 0.978 | élevée |
-| **Random Forest** | **0.891 ± 0.070** | **0.939** | 0.946 | modérée |
-| XGBoost | 0.920 ± 0.062 | 0.917 | 0.971 | modérée |
+| Modèle | F1 (test) | ROC-AUC |
+|---|---|---|
+| **Régression Logistique** | **0.621** | **0.837** |
+| Random Forest | 0.267 | 0.727 |
+| XGBoost | 0.333 | 0.640 |
 
-**Pourquoi Random Forest et pas la Régression Logistique ?**
+**Pourquoi la Régression Logistique et pas Random Forest ?**
 
-La LR a un ROC-AUC de 0.978 (meilleur des trois) mais une variance de ±0.100 en cross-validation — c'est trop instable pour un dataset de 131 exemples d'entraînement. Une variance élevée signifie que la performance dépend fortement du découpage train/val. En production avec peu de données, ce comportement est risqué.
+Avec de vrais labels bruités (décisions humaines non mécaniques) et seulement 200 exemples, Random Forest et XGBoost sur-apprennent : ils ont trop de capacité pour si peu de données. La Régression Logistique généralise mieux, est plus stable, et produit des probabilités naturellement calibrées — indispensable pour le score recruteur.
 
-Le Random Forest offre un meilleur équilibre F1/stabilité, régularisé naturellement par le bootstrap des arbres et le paramètre `max_depth=10`.
+Note : lors de la phase bootstrapping (pseudo-labels), Random Forest obtenait F1=0.939 car il reproduisait fidèlement la fonction heuristique. Sur de vrais labels, la hiérarchie s'inverse.
 
 ---
 
@@ -53,8 +54,8 @@ XGBoost n'est pas rejeté — il est mis de côté pour cette phase. Voici pourq
 **1. Taille du dataset (205 CV)**
 XGBoost est un algorithme de boosting — il construit des arbres séquentiellement en corrigeant les erreurs des précédents. Sur 205 exemples, ce mécanisme tend à sur-apprendre les patterns du train set. Le F1 en CV (0.920) est le meilleur, mais c'est aussi celui qui fluctue le plus en pratique selon les données.
 
-**2. Pseudo-labels, pas vrais labels**
-XGBoost apprend très bien. Trop bien, ici : il apprend à reproduire fidèlement la fonction de scoring heuristique, y compris ses biais implicites. Un Random Forest est plus "paresseux" — il généralise moins précisément, ce qui est une qualité quand la vérité terrain est approximative.
+**2. Labels réels bruités**
+XGBoost apprend très bien. Trop bien, sur 200 exemples : il sur-apprend les patterns spécifiques du train set. Avec de vrais labels (décisions humaines moins mécaniques), ce comportement pénalise fortement. F1 test = 0.333 confirme ce sur-apprentissage.
 
 **3. Opacité relative**
 Pour un système à haut risque (AI Act), le recruteur doit comprendre pourquoi un candidat est bien classé. Random Forest + SHAP produit des explications stables et cohérentes. XGBoost + SHAP fonctionne aussi mais les valeurs SHAP varient davantage selon les hyperparamètres.
@@ -65,7 +66,7 @@ XGBoost a ~15 hyperparamètres qui interagissent entre eux (`max_depth`, `learni
 ### Quand passer à XGBoost
 
 Dès que les conditions suivantes sont réunies :
-- Dataset >= 500 CV avec vrais labels recruteurs
+- Dataset >= 500 CVs avec vrais labels recruteurs
 - GridSearchCV avec 5-fold sur les hyperparamètres principaux
 - Calibration des probabilités (Platt Scaling) pour fiabiliser les scores
 
@@ -73,24 +74,36 @@ Dès que les conditions suivantes sont réunies :
 
 ## 3. Features
 
-### Features utilisées par le modèle (14 colonnes)
+### Features utilisées par le modèle (19 colonnes)
+
+#### Features brutes (10)
 
 | Feature | Type | Justification |
 |---|---|---|
+| `years_experience` | Float | Séniorité globale |
+| `avg_job_duration` | Float | Stabilité et engagement, indépendant de l'âge |
 | `education_level` | Ordinal 1-4 | Signal de formation structurant |
 | `nb_jobs` | Entier | Diversité d'expérience |
-| `years_experience` | Float | Séniorité — signal important mais non dominant depuis v2 |
-| `avg_job_duration` | Float | Stabilité et engagement, indépendant de l'âge |
-| `nb_technical_skills` | Entier | Adéquation technique |
 | `nb_methods_skills` | Entier | Maîtrise des processus |
-| `nb_management_skills` | Entier | Potentiel de responsabilité |
-| `total_skills` | Entier | Vue agrégée du profil |
 | `nb_languages` | Entier | Multilinguisme valorisé chez TechCore (contexte européen) |
-| `has_english` | Binaire | Anglais comme standard minimum IT |
-| `english_level` | Ordinal 0-6 | CECRL — nuance du niveau |
-| `has_french` | Binaire | Pertinent pour Liège (frontière linguistique) |
-| `has_german` | Binaire | Pertinent pour le marché belge/luxembourgeois |
 | `nb_certifications` | Entier | Investissement personnel, fiabilité |
+| `english_level` | Ordinal 0-6 | CECRL — nuance du niveau |
+| `has_german` | Binaire | Pertinent pour le marché belge/luxembourgeois |
+| `nb_technical_skills` | Entier | Adéquation technique |
+
+#### Features engineered (9) — `pipeline_ml/feature_engineering.py`
+
+| Feature | Formule | Corrélation avec label |
+|---|---|---|
+| `log_years_exp` | log1p(years_experience) | réduit dominance outliers |
+| `exp_edu_score` | years × education_level | **r=+0.364** — meilleur signal |
+| `cert_density` | nb_certifications / nb_jobs | certifications par poste |
+| `multilingual_score` | nb_languages + bonus anglais B2+ | score langue composite |
+| `method_tech_ratio` | nb_methods / nb_technical | équilibre profil |
+| `tech_per_year` | nb_technical / years | **r=−0.243** — détecte CV gonflés |
+| `career_depth` | years × avg_job_duration | **r=+0.257** — séniorité stable |
+| `is_it` | secteur == "IT" | one-hot secteur |
+| `is_finance` | secteur == "Finance" | one-hot secteur |
 
 ### Features exclues intentionnellement
 
@@ -110,11 +123,21 @@ Dans ce dataset synthétique, presque tous les candidats parlent anglais. Une fe
 
 ---
 
-## 4. Pseudo-labels
+## 4. Labels réels vs pseudo-labels
 
-### Principe
+### Labels actuels (Avril 2026)
 
-En l'absence d'historique de décisions RH, les labels sont générés par un scoring heuristique qui encode les critères implicites des recruteurs TechCore.
+Le modèle est entraîné sur **200 labels réels** fournis par les encadrants (`pipeline_ml/student_labels.csv`). 5 CVs (cv1–cv5) n'ont pas de label et sont ignorés à l'entraînement.
+
+Distribution : 51 invités (25%) / 149 rejetés (75%) — déséquilibré, géré par `class_weight='balanced'`.
+
+### Pseudo-labels (bootstrapping initial — phase révolue)
+
+En l'absence d'historique de décisions RH, les labels étaient générés par un scoring heuristique qui encodait les critères implicites des recruteurs TechCore.
+
+Ce système a été utilisé pour développer et tester le pipeline avant la réception des vrais labels. Les résultats pseudo-labels (F1=0.939) ne sont **pas comparables** aux résultats réels (F1=0.621) — les pseudo-labels étaient mécaniquement reproductibles par le modèle.
+
+Le fichier `pipeline_ml/pseudo_labels.py` est conservé pour documenter cette phase et pour générer un `heuristic_score` de référence.
 
 ### Scoring v2 — logique de chaque critère
 
@@ -175,18 +198,15 @@ L'accuracy est trompeuse dès qu'il y a un déséquilibre (ici 58/42). Un modèl
 
 Le F1 dépend d'un seuil de décision fixe (0.5 par défaut). Le ROC-AUC mesure la capacité du modèle à **ordonner** les candidats correctement, indépendamment du seuil. C'est la métrique la plus utile pour le recrutement, où ce qui compte c'est "qui est en haut de la liste", pas "qui dépasse 50%".
 
-### Interprétation de la confusion matrix (test set, 41 CV)
+### Résultats (labels réels, Avril 2026)
 
-```
-                   Prédit Rejeté   Prédit Invité
-Réel Rejeté             15              2
-Réel Invité              1             23
-```
+| Modèle | F1 (test) | ROC-AUC |
+|---|---|---|
+| **Régression Logistique** | **0.621** | **0.837** |
+| Random Forest | 0.267 | 0.727 |
+| XGBoost | 0.333 | 0.640 |
 
-- **2 faux positifs** : candidats rejetés classés invités → risque d'inviter un profil inadéquat
-- **1 faux négatif** : candidat invité classé rejeté → risque de rater un bon profil
-
-Dans un contexte recrutement, **les faux négatifs coûtent plus cher** (passer à côté d'un bon candidat). Le recall de 0.958 sur la classe "invité" est donc la métrique à surveiller en priorité.
+F1=0.621 est inférieur aux pseudo-labels (F1=0.939) — c'est **attendu et sain**. Les vrais labels sont moins mécaniques que les pseudo-labels. AUC=0.837 indique que le modèle classe correctement invités vs rejetés dans 84% des paires.
 
 ### Pas de MSE — pourquoi
 
@@ -200,12 +220,7 @@ Ce qui s'en approche : la **log-loss** (entropie croisée), qui pénalise les pr
 
 ### Overfitting — état actuel
 
-| Set | F1 |
-|---|---|
-| Train (cross-val) | 0.891 ± 0.070 |
-| Test | 0.939 |
-
-Le F1 test est supérieur au F1 train moyen — ce qui semble contre-intuitif. C'est un artefact de la petite taille du dataset et du split stratifié : le test set (41 CV) peut par chance être légèrement plus facile que le train. Il n'y a pas de signe fort d'overfitting, mais avec 205 exemples et 200 arbres, le modèle est surdimensionné. Sur un dataset plus grand et bruité (vrais CV), le F1 baissera avant de remonter avec plus de données.
+Avec 200 exemples réels, les scores sont modestes (F1=0.621). Ce n'est pas de l'overfitting — c'est la limite naturelle d'un petit dataset avec des labels bruités. Amélioration attendue de façon quasi-linéaire avec les données supplémentaires en cours de collecte.
 
 ---
 
@@ -327,8 +342,8 @@ Elle n'entre **jamais** dans le modèle. Elle sert uniquement au recruteur qui c
 
 | Limite | Impact | Mitigation prévue |
 |---|---|---|
-| Pseudo-labels, pas vrais labels | F1 mesure la reproduction des règles, pas la prédiction réelle | Collecte de vrais labels recruteurs |
-| 205 CV synthétiques | Modèle non validé sur vrais CV bruités | Tests sur vrais CV en Phase 5 |
+| 200 CVs seulement | F1=0.621 — scores limités par la taille du dataset | Données supplémentaires en cours (prof) |
+| Labels concentrés (25/75) | Classe minoritaire difficile à prédire | `class_weight='balanced'` + plus de données |
 | Aucun senior dans les données | Extrapolation non validée sur >45 ans | Enrichissement du dataset |
 | `years_experience` trop dominant | DI âge = 0.312, en dessous du seuil légal | À surveiller — si confirmé sur vrais données, retirer la feature |
 | Probabilités non calibrées | Score de 0.73 n'est pas "73% de chance" | Platt Scaling en Phase 4 |
