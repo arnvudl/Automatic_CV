@@ -1,11 +1,5 @@
 """
-parse_cv.py — Parsing et pseudonymisation des CV pour l'entraînement ML
-
-Sorties :
-  data/processed/features.csv    — features anonymisées (input du modèle ML)
-  data/processed/identities.csv  — identités + données sensibles (jamais vues par le ML)
-
-Pas de hard filter. Pas d'extraction de localisation.
+parse.py — Parsing et pseudonymisation des CV pour l'entraînement ML (Refactored)
 """
 
 import os
@@ -17,24 +11,26 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ==============================================================
-# CONFIG
+# CONFIG (Adaptée pour core/parse.py)
 # ==============================================================
-RAW_FOLDER = Path(__file__).parent.parent / "data" / "raw"
-PROCESSED_FOLDER = Path(__file__).parent.parent / "data" / "processed"
-LABELS_FILE = Path(__file__).parent / "student_labels.csv"
+ROOT = Path(__file__).parent.parent.parent
+RAW_FOLDER = ROOT / "data" / "raw"
+PROCESSED_FOLDER = ROOT / "data" / "processed"
+LABELS_FILE = Path(__file__).parent.parent / "config" / "student_labels.csv"
 
 TODAY = datetime.today()
-
 MAX_WORKERS = min(8, (os.cpu_count() or 1) * 2)
 
-# ==============================================================
-# REGEX COMPILÉES (une seule fois au chargement du module)
-# ==============================================================
+# ... (les fonctions de parsing _calculate_age, _get_sector, etc. restent identiques)
+
+LEVEL_MAP = {'a1': 1, 'a2': 2, 'b1': 3, 'b2': 4, 'c1': 5, 'c2': 6}
+SENIOR_KW = {'senior', 'lead', 'manager', 'director', 'head', 'chief', 'principal'}
+
 RE_NAME         = re.compile(r"Name:\s*(.*)", re.IGNORECASE)
 RE_GENDER       = re.compile(r"Gender:\s*(.*)", re.IGNORECASE)
 RE_DOB          = re.compile(r"Date of Birth:\s*(.*)", re.IGNORECASE)
 RE_EMAIL        = re.compile(r"Email:\s*(.*)", re.IGNORECASE)
-RE_EMAIL_MD     = re.compile(r"\[([^\]]+)\]\(mailto:[^\)]+\)")  # [addr](mailto:addr)
+RE_EMAIL_MD     = re.compile(r"\[([^\]]+)\]\(mailto:[^\)]+\)")
 RE_PHONE        = re.compile(r"Phone:\s*(.*)", re.IGNORECASE)
 RE_TARGET_ROLE  = re.compile(r"Target Role:\s*(.*)", re.IGNORECASE)
 RE_STATUS       = re.compile(r"(?:Status|Decision):\s*(.*)", re.IGNORECASE)
@@ -47,19 +43,12 @@ RE_TECH         = re.compile(r"Technical:\s*(.*)", re.IGNORECASE)
 RE_METH         = re.compile(r"Methods:\s*(.*)", re.IGNORECASE)
 RE_MAN          = re.compile(r"Management:\s*(.*)", re.IGNORECASE)
 
-LEVEL_MAP = {'a1': 1, 'a2': 2, 'b1': 3, 'b2': 4, 'c1': 5, 'c2': 6}
-SENIOR_KW = {'senior', 'lead', 'manager', 'director', 'head', 'chief', 'principal'}
-
-# ==============================================================
-# UTILITAIRES
-# ==============================================================
 def _calculate_age(dob_str: str) -> int | None:
     try:
         dob = datetime.strptime(dob_str.strip(), "%Y-%m-%d")
         return TODAY.year - dob.year - ((TODAY.month, TODAY.day) < (dob.month, dob.day))
     except (ValueError, AttributeError):
         return None
-
 
 def _get_sector(target_role: str | None) -> str:
     if not target_role:
@@ -75,7 +64,6 @@ def _get_sector(target_role: str | None) -> str:
         return "Public"
     return "Other"
 
-
 def _get_education_level(diploma: str | None) -> int:
     if not diploma:
         return 1
@@ -88,7 +76,6 @@ def _get_education_level(diploma: str | None) -> int:
         return 2
     return 1
 
-
 def _parse_date(date_str: str) -> datetime | None:
     s = date_str.strip().lower()
     if s == 'present':
@@ -98,29 +85,17 @@ def _parse_date(date_str: str) -> datetime | None:
     except ValueError:
         return None
 
-
 def _is_senior(title: str) -> bool:
     return bool(SENIOR_KW.intersection(title.lower().split()))
-
 
 def _split_sections(content: str) -> dict[str, str]:
     parts = RE_SECTIONS.split(content)
     return {parts[i]: parts[i + 1].strip() for i in range(1, len(parts) - 1, 2)}
 
-
-# ==============================================================
-# PARSING D'UN CV
-# ==============================================================
 def parse_cv(filepath: Path, labels_dict: dict) -> tuple[dict, dict]:
-    """
-    Retourne (identity_row, feature_row).
-    identity_row : données sensibles, jamais envoyées au ML.
-    feature_row  : features anonymisées pour le ML.
-    """
     content = filepath.read_text(encoding='utf-8')
-    filename = filepath.stem  # nom sans extension
+    filename = filepath.stem
 
-    # --- Champs d'identité ---
     name_m    = RE_NAME.search(content)
     gender_m  = RE_GENDER.search(content)
     dob_m     = RE_DOB.search(content)
@@ -141,7 +116,6 @@ def parse_cv(filepath: Path, labels_dict: dict) -> tuple[dict, dict]:
 
     cv_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, filename))
 
-    # --- Label ---
     label_val = None
     fn_lower = filename.lower()
     if "invite" in fn_lower:
@@ -163,14 +137,11 @@ def parse_cv(filepath: Path, labels_dict: dict) -> tuple[dict, dict]:
         elif "reject" in raw or raw == "0":
             label_val = 0
 
-    # --- Target role / secteur ---
     tr_m = RE_TARGET_ROLE.search(content)
     target_role = tr_m.group(1).strip() if tr_m else None
     sector = _get_sector(target_role)
-
     sections = _split_sections(content)
 
-    # --- Education ---
     education_level = 1
     education_field = None
     if "Education" in sections:
@@ -180,7 +151,6 @@ def parse_cv(filepath: Path, labels_dict: dict) -> tuple[dict, dict]:
             education_level = _get_education_level(parts[0] if parts else None)
             education_field = parts[1] if len(parts) > 1 else None
 
-    # --- Experience ---
     nb_jobs = 0
     years_experience = 0.0
     jobs = []
@@ -206,7 +176,6 @@ def parse_cv(filepath: Path, labels_dict: dict) -> tuple[dict, dict]:
                 and not _is_senior(first_job['title'])):
             career_progression = 1
 
-    # --- Skills ---
     nb_tech = nb_meth = nb_man = 0
     if "Skills" in sections:
         sk = sections["Skills"]
@@ -219,7 +188,6 @@ def parse_cv(filepath: Path, labels_dict: dict) -> tuple[dict, dict]:
 
     total_skills = nb_tech + nb_meth + nb_man
 
-    # --- Languages ---
     nb_languages = has_english = has_french = has_german = has_luxembourgish = 0
     english_level = 0
     if "Languages" in sections:
@@ -238,7 +206,6 @@ def parse_cv(filepath: Path, labels_dict: dict) -> tuple[dict, dict]:
             if any(k in lang for k in ('luxembourgish', 'luxembourgeois', 'lëtzebuergesch')):
                 has_luxembourgish = 1
 
-    # --- Certifications ---
     nb_certifications = 0
     if "Certifications" in sections:
         nb_certifications = len([l for l in sections["Certifications"].split('\n') if l.strip()])
@@ -253,7 +220,6 @@ def parse_cv(filepath: Path, labels_dict: dict) -> tuple[dict, dict]:
         'age':    age,
     }
 
-    # Profil pour filtre dashboard — metadata uniquement, jamais utilisé comme feature ML
     if years_experience < 3:
         profile_type = "junior"
     elif years_experience < 8:
@@ -288,10 +254,6 @@ def parse_cv(filepath: Path, labels_dict: dict) -> tuple[dict, dict]:
 
     return identity_row, feature_row
 
-
-# ==============================================================
-# MAIN
-# ==============================================================
 def main():
     if not RAW_FOLDER.exists():
         print(f"Dossier introuvable : {RAW_FOLDER}")
@@ -299,14 +261,12 @@ def main():
 
     PROCESSED_FOLDER.mkdir(parents=True, exist_ok=True)
 
-    # Labels réels depuis student_labels.csv
-    # Colonnes : filename (ex. cv_0001.txt), passed_next_stage (0/1)
     labels_dict: dict = {}
     if LABELS_FILE.exists():
         with LABELS_FILE.open(encoding='utf-8') as f:
             for row in csv.DictReader(f):
                 if 'filename' in row and 'passed_next_stage' in row:
-                    stem = Path(row['filename']).stem  # "cv_0001.txt" -> "cv_0001"
+                    stem = Path(row['filename']).stem
                     labels_dict[stem] = row['passed_next_stage']
 
     cv_files = list(RAW_FOLDER.glob("*.txt"))
@@ -318,7 +278,6 @@ def main():
     features:   list[dict] = []
     errors = 0
 
-    # Lecture en parallèle (I/O-bound)
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
         futures = {pool.submit(parse_cv, f, labels_dict): f for f in cv_files}
         for future in as_completed(futures):
@@ -331,7 +290,6 @@ def main():
                 errors += 1
                 print(f"  [ERREUR] {filepath.name} : {exc}")
 
-    # Export features.csv
     feat_headers = [
         'cv_id', 'profile_type', 'target_role', 'sector',
         'education_level', 'education_field',
@@ -346,22 +304,13 @@ def main():
         writer.writeheader()
         writer.writerows(features)
 
-    # Export identities.csv
-    id_headers = ['cv_id', 'source_filename', 'name', 'email', 'phone', 'gender', 'age']
     identities_path = PROCESSED_FOLDER / "identities.csv"
     with identities_path.open('w', newline='', encoding='utf-8') as f:
-        writer = csv.DictWriter(f, fieldnames=id_headers)
+        writer = csv.DictWriter(f, fieldnames=['cv_id', 'source_filename', 'name', 'email', 'phone', 'gender', 'age'])
         writer.writeheader()
         writer.writerows(identities)
 
-    labels_found = sum(1 for r in features if r['label'] is not None)
-    print(f"CV traités    : {len(features)}  ({errors} erreur(s))")
-    print(f"Labels trouvés: {labels_found}")
-    print(f"features.csv   : {features_path}")
-    print(f"identities.csv : {identities_path}")
-    print("\nNote RGPD : identities.csv contient les donnees sensibles (genre, age).")
-    print("           Ces colonnes ne doivent JAMAIS etre passees au modele ML.")
-
+    print(f"CV traités : {len(features)} | Fichiers générés dans {PROCESSED_FOLDER}")
 
 if __name__ == "__main__":
     main()
