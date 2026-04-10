@@ -21,7 +21,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # ==============================================================
 RAW_FOLDER = Path(__file__).parent.parent / "data" / "raw"
 PROCESSED_FOLDER = Path(__file__).parent.parent / "data" / "processed"
-LABELS_FILE = RAW_FOLDER / "labels.csv"
+LABELS_FILE = Path(__file__).parent / "student_labels.csv"
 
 TODAY = datetime.today()
 
@@ -34,6 +34,7 @@ RE_NAME         = re.compile(r"Name:\s*(.*)", re.IGNORECASE)
 RE_GENDER       = re.compile(r"Gender:\s*(.*)", re.IGNORECASE)
 RE_DOB          = re.compile(r"Date of Birth:\s*(.*)", re.IGNORECASE)
 RE_EMAIL        = re.compile(r"Email:\s*(.*)", re.IGNORECASE)
+RE_EMAIL_MD     = re.compile(r"\[([^\]]+)\]\(mailto:[^\)]+\)")  # [addr](mailto:addr)
 RE_PHONE        = re.compile(r"Phone:\s*(.*)", re.IGNORECASE)
 RE_TARGET_ROLE  = re.compile(r"Target Role:\s*(.*)", re.IGNORECASE)
 RE_STATUS       = re.compile(r"(?:Status|Decision):\s*(.*)", re.IGNORECASE)
@@ -129,7 +130,12 @@ def parse_cv(filepath: Path, labels_dict: dict) -> tuple[dict, dict]:
     name   = name_m.group(1).strip()   if name_m   else None
     gender = gender_m.group(1).strip() if gender_m else None
     dob    = dob_m.group(1).strip()    if dob_m    else None
-    email  = email_m.group(1).strip()  if email_m  else None
+    if email_m:
+        raw_email = email_m.group(1).strip()
+        md = RE_EMAIL_MD.search(raw_email)
+        email = md.group(1) if md else raw_email
+    else:
+        email = None
     phone  = phone_m.group(1).strip()  if phone_m  else None
     age    = _calculate_age(dob)
 
@@ -293,13 +299,15 @@ def main():
 
     PROCESSED_FOLDER.mkdir(parents=True, exist_ok=True)
 
-    # Labels externes optionnels
+    # Labels réels depuis student_labels.csv
+    # Colonnes : filename (ex. cv_0001.txt), passed_next_stage (0/1)
     labels_dict: dict = {}
     if LABELS_FILE.exists():
         with LABELS_FILE.open(encoding='utf-8') as f:
             for row in csv.DictReader(f):
-                if 'cv_id' in row and 'label' in row:
-                    labels_dict[row['cv_id']] = row['label']
+                if 'filename' in row and 'passed_next_stage' in row:
+                    stem = Path(row['filename']).stem  # "cv_0001.txt" -> "cv_0001"
+                    labels_dict[stem] = row['passed_next_stage']
 
     cv_files = list(RAW_FOLDER.glob("*.txt"))
     if not cv_files:

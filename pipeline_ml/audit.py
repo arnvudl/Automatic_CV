@@ -323,15 +323,14 @@ def audit_shap(model, X: np.ndarray, feature_cols: list, df: pd.DataFrame, lines
     lines.append("4. EXPLICABILITÉ SHAP")
     lines.append("=" * 60)
 
-    explainer   = shap.TreeExplainer(model)
-    shap_values = explainer.shap_values(X)
+    # shap.Explainer auto-detecte le type de modele (tree, linear, kernel...)
+    explainer   = shap.Explainer(model, shap.maskers.Independent(X, max_samples=100))
+    shap_result = explainer(X)
 
-    # shap_values peut être (n, features, classes) ou [class0, class1] selon la version
-    sv = np.array(shap_values)
+    # .values peut etre (n, features) ou (n, features, classes)
+    sv = shap_result.values
     if sv.ndim == 3:
         sv = sv[:, :, 1]   # classe "invite"
-    elif isinstance(shap_values, list):
-        sv = shap_values[1]
 
     # --- Importance globale ---
     mean_abs = np.abs(sv).mean(axis=0)
@@ -396,19 +395,26 @@ def main():
     model        = joblib.load(MODEL_PATH)
     feature_cols = joblib.load(FEAT_COLS_PATH)
 
-    X      = df[feature_cols].values.astype(float)
-    y_pred  = model.predict(X)
-    y_proba = model.predict_proba(X)[:, 1]
+    # Supprimer les CV sans label pour les métriques de fairness
+    df_labeled = df[df["label"].notna()].copy()
+    unlabeled  = len(df) - len(df_labeled)
+    if unlabeled:
+        print(f"  {unlabeled} CV sans label exclus des metriques (gardes pour SHAP)")
+
+    X       = df[feature_cols].values.astype(float)
+    X_lab   = df_labeled[feature_cols].values.astype(float)
+    y_pred  = model.predict(X_lab)
+    y_proba = model.predict_proba(X_lab)[:, 1]
 
     lines = ["RAPPORT D'AUDIT — CV-Intelligence", "=" * 60, ""]
 
-    print(f"\nDataset complet : {len(df)} CV")
-    print(f"Prédit invités  : {y_pred.sum()} ({y_pred.mean():.0%})")
+    print(f"\nDataset : {len(df)} CV  ({len(df_labeled)} labelles)")
+    print(f"Predit invites : {y_pred.sum()} ({y_pred.mean():.0%})")
 
-    audit_structural_bias(df, lines)
-    audit_fairness(df, y_pred, y_proba, lines)
-    audit_subgroups(df, y_pred, y_proba, lines)
-    audit_shap(model, X, feature_cols, df, lines)
+    audit_structural_bias(df_labeled, lines)
+    audit_fairness(df_labeled, y_pred, y_proba, lines)
+    audit_subgroups(df_labeled, y_pred, y_proba, lines)
+    audit_shap(model, X, feature_cols, df, lines)  # SHAP sur tous les CV
 
     # Sauvegarde du rapport
     report_path = REPORTS_DIR / "audit.txt"

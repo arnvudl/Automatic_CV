@@ -1,17 +1,17 @@
-Meilleur modele : XGBoost
-F1-Score        : 0.920
-ROC-AUC         : 0.968
+Meilleur modele : Regression Logistique
+F1-Score        : 0.385
+ROC-AUC         : 0.653
 
 Confusion matrix :
-[[14  3]
- [ 1 23]]
+[[19 11]
+ [ 5  5]]
 
 Classification report :
               precision    recall  f1-score   support
 
-      Rejeté       0.93      0.82      0.88        17
-      Invité       0.88      0.96      0.92        24
+      Rejeté       0.79      0.63      0.70        30
+      Invité       0.31      0.50      0.38        10
 
-    accuracy                           0.90        41
-   macro avg       0.91      0.89      0.90        41
-weighted avg       0.90      0.90      0.90        41
+    accuracy                           0.60        40
+   macro avg       0.55      0.57      0.54        40
+weighted avg       0.67      0.60      0.62        40

@@ -44,23 +44,30 @@ REPORTS_DIR    = Path(__file__).parent.parent / "reports"
 RANDOM_STATE   = 42
 
 # Features passées au modèle — jamais age, gender, nom, email, téléphone
-# Retirées (SHAP = 0 en v1, mortes) : career_progression, has_luxembourgish
-# has_english réintégré : scoring v2 valorise les langues, la feature n'est plus morte
+# Features engineered ajoutées (feature_engineering.py) :
+#   exp_edu_score (r=+0.364), career_depth (r=+0.257), tech_per_year (r=-0.243)
 FEATURE_COLS = [
-    "education_level",
-    "nb_jobs",
+    # Features brutes (corrélation > 0.10 avec label)
     "years_experience",
     "avg_job_duration",
-    "nb_technical_skills",
+    "education_level",
+    "nb_jobs",
     "nb_methods_skills",
-    "nb_management_skills",
-    "total_skills",
     "nb_languages",
-    "has_english",
-    "english_level",
-    "has_french",
-    "has_german",
     "nb_certifications",
+    "english_level",
+    "has_german",
+    "nb_technical_skills",
+    # Features engineered
+    "log_years_exp",
+    "exp_edu_score",
+    "cert_density",
+    "multilingual_score",
+    "method_tech_ratio",
+    "tech_per_year",
+    "career_depth",
+    "is_it",
+    "is_finance",
 ]
 TARGET_COL = "label"
 
@@ -70,15 +77,23 @@ TARGET_COL = "label"
 def load_data() -> pd.DataFrame:
     df = pd.read_csv(FEATURES_PATH, dtype=str)
 
+    # Supprimer les CV sans label (pas dans student_labels.csv)
+    before = len(df)
+    df = df[df[TARGET_COL].notna() & (df[TARGET_COL] != "")]
+    dropped = before - len(df)
+    if dropped:
+        print(f"  {dropped} CV sans label ignores (pas dans student_labels.csv)")
+
     # Colonnes numériques
     num_cols = FEATURE_COLS + [TARGET_COL]
     df[num_cols] = df[num_cols].apply(pd.to_numeric, errors="coerce")
 
-    missing = df[num_cols].isnull().sum()
-    if missing.any():
-        print("Valeurs manquantes détectées, imputation à 0 :")
-        print(missing[missing > 0])
-        df[num_cols] = df[num_cols].fillna(0)
+    # Imputation uniquement pour les features (pas le label)
+    missing_feat = df[FEATURE_COLS].isnull().sum()
+    if missing_feat.any():
+        print("Valeurs manquantes dans les features, imputation a 0 :")
+        print(missing_feat[missing_feat > 0])
+        df[FEATURE_COLS] = df[FEATURE_COLS].fillna(0)
 
     return df
 
