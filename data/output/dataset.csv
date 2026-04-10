@@ -1,6 +1,0 @@
-cv_id,age,gender,country,target_role,sector,education_level,education_field,nb_jobs,years_experience,avg_job_duration,career_progression,nb_technical_skills,nb_methods_skills,nb_management_skills,total_skills,nb_languages,has_english,english_level,has_french,has_german,has_luxembourgish,nb_certifications,label
-cv1,35,Female,USA,Senior Data Analyst,Finance,2,Statistics,2,13.3,6.7,0,5,4,3,12,2,1,6,0,0,0,1,
-cv2,38,Male,USA,Operations Manager,Industry,2,Supply Chain Management,2,15.3,7.7,0,4,4,3,11,2,1,6,0,0,0,1,
-cv3,32,Female,Germany,Software Engineering Lead,IT,3,Computer Science,2,9.5,4.8,0,5,4,3,12,2,1,5,0,1,0,1,
-cv4,41,Male,Nigeria,Financial Controller,Finance,2,Accounting,2,18.3,9.2,0,4,4,3,11,2,1,6,0,0,0,1,
-cv5,29,Female,France,Marketing Manager,Other,3,Marketing,2,7.2,3.6,0,4,4,3,11,2,1,5,1,0,0,1,

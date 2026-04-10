@@ -1,0 +1,7 @@
+"Sujet","Ce qui est autorisé","Ce qui est risqué / interdit","Mesure à mettre en place"
+"Tri initial de CV","Utiliser l’IA comme aide au classement ou au repérage de profils getpro+1","Rejet automatique sans révision humaine réelle, si la décision est fondée exclusivement sur le traitement automatisé donneespersonnelles+1","Prévoir une validation humaine avant tout rejet silexo+1"
+"Décision de recrutement","L’humain prend la décision finale securex+1","Décision entièrement automatisée avec effet significatif sur le candidat, sauf exception RGPD étroite donneespersonnelles+1","Formaliser une étape d’approbation humaine et la tracer lexing+1"
+"Transparence","Informer les candidats de l’usage de l’IA lexing+1","Utilisation “cachée” de l’IA dans le processus securex","Ajouter l’information dans l’avis de confidentialité et les communications RH cnil+1"
+"Biais et discrimination","Tester et surveiller les résultats du système aumans-avocats+1","Modèle qui écarte systématiquement certains profils atypiques ou protégés silexo+1","Audits réguliers, tests de biais, revue d’échantillons lexing+1"
+"Données utilisées","Données pertinentes et limitées à la sélection cnil+1","Collecte excessive, données sensibles ou non pertinentes cnil+1","Minimisation des données et paramétrage strict des champs analysés cnil+1"
+"AI Act","Usage possible, mais encadré comme système à haut risque pour le recrutement getpro+1","Usage non documenté, non supervisé, non testé aumans-avocats+1","Documentation technique, gestion des risques, supervision humaine aumans-avocats+1"

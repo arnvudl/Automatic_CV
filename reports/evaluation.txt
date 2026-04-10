@@ -1,0 +1,17 @@
+Meilleur modele : Random Forest
+F1-Score        : 0.837
+ROC-AUC         : 0.924
+
+Confusion matrix :
+[[16  4]
+ [ 3 18]]
+
+Classification report :
+              precision    recall  f1-score   support
+
+      Rejeté       0.84      0.80      0.82        20
+      Invité       0.82      0.86      0.84        21
+
+    accuracy                           0.83        41
+   macro avg       0.83      0.83      0.83        41
+weighted avg       0.83      0.83      0.83        41

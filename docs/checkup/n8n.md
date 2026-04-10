@@ -73,3 +73,29 @@ C'est le nœud critique qui fait le lien avec ton code Python.
 * **Interface n8n :** Opérationnelle sur `https://n8n.lony.app`.
 * **Pipeline API :** Reçoit les fichiers et renvoie un `candidate_id` avec le statut `awaiting_review`.
 * **Logs :** Visibles en temps réel via `docker logs cv_api -f`.
+
+---
+
+## 5. Évolution — Phase ML (Avril 2026)
+
+Le pipeline n8n reste inchangé. La Phase 2 et 3 du projet ont été réalisées **hors n8n**, en local, sur des données synthétiques.
+
+### Ce qui a été fait (indépendamment de n8n)
+
+| Étape | Fichier | Résultat |
+| :--- | :--- | :--- |
+| Parsing + pseudonymisation | `pipeline_ml/parse_cv.py` | `data/processed/features.csv` + `identities.csv` |
+| Génération pseudo-labels | `pipeline_ml/pseudo_labels.py` | Colonne `label` remplie (seuil score >= 12/16) |
+| Entraînement ML | `pipeline_ml/train.py` | `models/model.pkl` (Random Forest, F1=0.837) |
+
+### Connexion future n8n → ML
+
+Quand le modèle sera validé, le nœud 5 (POST vers FastAPI) sera étendu :
+
+```
+Nœud 5 (actuel) : POST /api/v1/candidates  →  candidate_id + awaiting_review
+         ↓
+Nœud 6 (futur)  : POST /api/v1/score       →  score ML (0.0–1.0) + features extraites
+```
+
+Le scoring sera déclenché automatiquement après réception du CV, sans intervention humaine. La décision finale reste toujours humaine (AI Act).

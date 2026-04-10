@@ -1,4 +1,29 @@
-.venv
+# Environnement Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Variables d'environnement
 .env
 api/.env
-data/raw
+
+# Données brutes et traitées (RGPD — ne jamais commiter)
+data/raw/
+data/processed/
+
+# Modèles entraînés (artefacts de build, trop lourds pour Git)
+models/
+
+# Rapports générés
+reports/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

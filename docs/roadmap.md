@@ -1,44 +1,122 @@
-### 📝 1. Parsing (Extraction des données)
-Ton ami a rédigé un script robuste basé sur des expressions régulières (Regex) qui fonctionne parfaitement si les CV ont une structure homogène.
+# Roadmap — CV-Intelligence
 
-* **Conseil stratégique :** Garde ce script comme base. Les Regex sont extrêmement rapides et ne coûtent rien en puissance de calcul comparé à un modèle NLP lourd (comme un LLM). Si la structure de tes CV varie plus tard, tu pourras évoluer vers du NLP pur (spaCy ou Textract).
-* **To-Do :**
-    1.  Copier le fichier `extraction_cv.py` dans le dossier de ton API (sur DigitalOcean).
-    2.  Modifier ton `main.py` (FastAPI) pour qu'il lise le fichier binaire reçu depuis n8n, le décode en texte (`.decode('utf-8')`), et l'envoie à la fonction `parse_cv`.
+## État d'avancement
 
-### 🕵️‍♂️ 2. Pseudonymisation (Gestion de l'identité)
-Tu as parfaitement raison : la pseudonymisation est la seule voie viable en recrutement. Tu dois pouvoir recontacter le candidat si le modèle valide son profil.
+| Phase | Objectif | Statut |
+|-------|----------|--------|
+| 1 | Infrastructure & automatisation n8n | ✅ Terminé |
+| 2 | Pré-traitement des données (parsing, anonymisation, hard filters) | 🔄 En cours |
+| 3 | Entraînement du modèle ML | 📅 Planifié |
+| 4 | Dashboard RH + audit biais + conformité | 📅 Planifié |
+| 5 | Tests, client pilote, documentation finale | 📅 Planifié |
 
-* **Conseil stratégique :** Le modèle ML ne doit **jamais** voir le nom ou l'email. Séparer l'identité des compétences au niveau de la base de données.
-* **To-Do :**
-    1.  Dans FastAPI, générer un identifiant unique (`cv_id` = UUID).
-    2.  Créer deux tables sur Supabase : 
-        * `candidats_identites` : `cv_id`, `Nom`, `Email`, `Telephone`.
-        * `candidats_features` : `cv_id`, `nb_jobs`, `years_experience`, `education_level`.
+---
 
-### 🛑 3. Critères Minimums (Hard Filters)
-Un modèle de Machine Learning consomme des ressources et peut parfois halluciner. Il ne faut pas le solliciter pour des profils évidents à rejeter.
+## Phase 1 — Infrastructure & Automatisation n8n ✅
 
-* **Conseil stratégique :** Implémente un filtre déterministe (règles métier) juste après le parsing et *avant* le Machine Learning. Si le candidat échoue ici, le pipeline s'arrête et le statut passe en "Rejet Auto".
-* **To-Do :**
-    1.  Écrire une fonction de validation simple dans FastAPI : `if data['years_experience'] < 2: return "Rejeté"` (exemple).
-    2.  Si validé, passer les données au modèle ML.
+**Terminé.** Le pipeline d'ingestion automatique est opérationnel.
 
-### 🧠 4. Machine Learning (Prédiction)
-Le modèle est effectivement une simple fonction mathématique (ex: Régression Logistique ou Random Forest) qui prend tes données parsées et sort un score (0 ou 1).
+- Serveur Ubuntu (DigitalOcean) + Nginx reverse proxy + SSL Let's Encrypt
+- Instance n8n sur `https://n8n.lony.app`
+- Workflow n8n en 5 nœuds : Schedule → GET emails → Filter (pièces jointes) → Download binary → POST multipart vers FastAPI
+- API FastAPI `cv_api` reçoit le CV et renvoie un `candidate_id` avec statut `awaiting_review`
+- Communication interne Docker via `http://api:8000`
 
-* **Conseil stratégique :** Entraîne ton modèle sur ton PC local en utilisant le fichier CSV généré par le script de ton ami. Exporte ensuite ce modèle sous forme de fichier binaire léger (format `.pkl` avec `joblib` ou `pickle`).
-* **To-Do :**
-    1.  Entraîner le modèle localement (Notebook Jupyter).
-    2.  Exporter le modèle entraîné (`model.pkl`).
-    3.  Importer `model.pkl` dans ton conteneur Docker FastAPI.
-    4.  Faire un `model.predict([features_du_candidat])` dans ton `main.py`.
+---
 
-### ⚖️ 5. Audit des biais (Éthique & Conformité)
-Le script de parsing extrait des données sensibles comme le `Gender`.
+## Phase 2 — Pré-traitement des données 🔄
 
-* **Conseil stratégique :** **Interdiction formelle** de fournir la variable `Gender` (ou l'âge, l'origine) au modèle de Machine Learning lors de l'entraînement ou de la prédiction. 
-* **To-Do :**
-    1.  Exclure `Gender` et `Age` du tableau de `features` envoyé au modèle.
-    2.  Sauvegarder tout de même ces données dans Supabase à des fins de monitoring uniquement.
-    3.  Créer une requête SQL ou un Dashboard Supabase pour vérifier le ratio d'acceptation : *(Nombre de Femmes acceptées / Nombre total de Femmes)* vs *(Nombre d'Hommes acceptés / Nombre total d'Hommes)* pour s'assurer que le modèle est neutre.
+C'est la phase en cours. L'objectif est de préparer les données pour entraîner le modèle ML, en respectant le cadre RGPD et AI Act.
+
+Les CV bruts se trouvent dans `data/raw/`. Le parser de base (`pipeline_ml/extraction_cv.py`) est déjà fonctionnel.
+
+### 2.1 Parsing (extraction des features)
+
+Extraire les données structurées depuis les CV texte (`.txt`, `.pdf`).
+
+- Utiliser `pipeline_ml/extraction_cv.py` comme base (Regex, rapide, sans coût de calcul)
+- Features à extraire : `nb_jobs`, `years_experience`, `education_level`, `skills`, `languages`
+- **Ne pas extraire** pour le modèle : `gender`, `age`, `nom`, `prénom`, `nationalité` — données sensibles exclues du ML (voir §RGPD)
+- Output : fichier CSV structuré `data/processed/features.csv`
+
+### 2.2 Anonymisation / Pseudonymisation
+
+Le modèle ML ne doit jamais voir les données d'identité.
+
+- Générer un `cv_id` (UUID) par candidat dès l'ingestion
+- Séparer en deux flux :
+  - **Identités** (`cv_id`, `nom`, `email`, `téléphone`) → stockées séparément, jamais envoyées au modèle
+  - **Features** (`cv_id`, features extraites) → seules données vues par le ML
+- Les données sensibles (`gender`, `age`) sont stockées uniquement à des fins de monitoring biais, jamais comme input du modèle
+
+### 2.3 Hard Filters (critères minimums)
+
+Filtre déterministe appliqué **avant** le ML, pour rejeter les profils manifestement hors critères sans solliciter le modèle.
+
+Exemples de règles :
+- Expérience < 2 ans → non éligible
+- Aucune compétence requise présente → non éligible
+- CV illisible / parsing échoué → revue manuelle
+
+**Important (RGPD)** : un rejet issu du hard filter est toujours soumis à révision humaine avant notification. Il ne s'agit pas d'un rejet automatique définitif.
+
+---
+
+## Phase 3 — Entraînement du modèle ML 📅
+
+Une fois les données pré-traitées et validées.
+
+- Entraîner un modèle (Régression Logistique ou Random Forest en premier, XGBoost ensuite)
+- Entrée : features anonymisées du CSV `data/processed/features.csv`
+- Sortie : score de compatibilité (probabilité, pas une décision binaire)
+- Export : `model.pkl` (joblib) intégré dans le conteneur FastAPI
+- Audit biais : vérifier le ratio d'acceptation par groupe (genre, âge) via Fairlearn
+
+---
+
+## Phase 4 — Dashboard RH + Conformité 📅
+
+- Interface recruteur : classement par score, explications (SHAP), actions manuelles
+- Le recruteur peut corriger ou rejeter toute suggestion du modèle
+- Traçabilité : qui a revu quoi, quand, avec quel motif (log immuable)
+- Rapport biais périodique exportable
+- Voie de contestation candidat (demande de révision humaine)
+
+---
+
+## Conformité RGPD & AI Act
+
+Le recrutement est classé **usage à haut risque** par l'AI Act (Annexe III). Les obligations majeures sont en vigueur en 2026.
+
+### Ce que le système fait (et doit continuer à faire)
+
+| Sujet | Règle appliquée |
+|-------|----------------|
+| Décision finale | Toujours humaine — le modèle produit des suggestions, jamais des décisions |
+| Rejet | Aucun rejet définitif sans revue humaine tracée |
+| Transparence | Les candidats sont informés de l'usage de l'IA et disposent d'une voie de contestation |
+| Données utilisées | Minimisation stricte — seules les features pertinentes au poste sont analysées |
+| Données sensibles | `gender`, `age` exclus du modèle — monitoring biais uniquement |
+| Explicabilité | Le recruteur voit les critères de score et les raisons principales du classement |
+| Audit biais | Vérification périodique du Disparate Impact Ratio par groupe |
+| Traçabilité | Log de chaque action humaine (qui, quand, motif) |
+
+### Ce qui est interdit
+
+- Rejet automatique sans révision humaine réelle
+- Score "caché" sans contrôle ni explication au recruteur
+- Utilisation du genre, de l'âge ou de l'origine comme feature du modèle
+- Collecte de données non pertinentes pour le recrutement
+
+### Mise en place pratique
+
+1. **Règle interne documentée** : aucun rejet définitif sans revue humaine
+2. **Information candidat** : mention de l'IA dans l'avis de confidentialité et les emails de réponse
+3. **Voie de contestation** : le candidat peut demander une révision humaine en cas de rejet
+4. **Audits périodiques** : biais, faux négatifs, profils atypiques
+5. **Validation d'un échantillon** : revue manuelle régulière de CV classés par le modèle, y compris les profils atypiques
+6. **Documentation technique** : finalité du système, limites, données utilisées (exigence AI Act)
+
+---
+
+*Dernière mise à jour : Avril 2026*
