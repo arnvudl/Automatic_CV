@@ -44,12 +44,13 @@ REPORTS_DIR    = Path(__file__).parent.parent / "reports"
 RANDOM_STATE   = 42
 
 # Features passées au modèle — jamais age, gender, nom, email, téléphone
+# Retirées (SHAP = 0 en v1, mortes) : career_progression, has_luxembourgish
+# has_english réintégré : scoring v2 valorise les langues, la feature n'est plus morte
 FEATURE_COLS = [
     "education_level",
     "nb_jobs",
     "years_experience",
     "avg_job_duration",
-    "career_progression",
     "nb_technical_skills",
     "nb_methods_skills",
     "nb_management_skills",
@@ -59,7 +60,6 @@ FEATURE_COLS = [
     "english_level",
     "has_french",
     "has_german",
-    "has_luxembourgish",
     "nb_certifications",
 ]
 TARGET_COL = "label"

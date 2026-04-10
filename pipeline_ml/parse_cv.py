@@ -247,8 +247,17 @@ def parse_cv(filepath: Path, labels_dict: dict) -> tuple[dict, dict]:
         'age':    age,
     }
 
+    # Profil pour filtre dashboard — metadata uniquement, jamais utilisé comme feature ML
+    if years_experience < 3:
+        profile_type = "junior"
+    elif years_experience < 8:
+        profile_type = "intermediate"
+    else:
+        profile_type = "senior"
+
     feature_row = {
         'cv_id':                cv_id,
+        'profile_type':         profile_type,
         'target_role':          target_role,
         'sector':               sector,
         'education_level':      education_level,
@@ -316,7 +325,7 @@ def main():
 
     # Export features.csv
     feat_headers = [
-        'cv_id', 'target_role', 'sector',
+        'cv_id', 'profile_type', 'target_role', 'sector',
         'education_level', 'education_field',
         'nb_jobs', 'years_experience', 'avg_job_duration', 'career_progression',
         'nb_technical_skills', 'nb_methods_skills', 'nb_management_skills', 'total_skills',
