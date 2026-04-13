@@ -9,7 +9,9 @@ api/.env
 data/raw/
 data/processed/
 models/
-reports/
+reports/plots
+reports/audit.txt
+reports/evaluation.txt
 .idea/
 .vscode/
 .DS_Store
