@@ -20,11 +20,8 @@ REPORTS_DIR   = ROOT / "reports"
 RANDOM_STATE  = 42
 
 FEATURE_COLS = [
-    "years_experience", "avg_job_duration", "education_level", "nb_jobs",
-    "nb_methods_skills", "nb_languages", "nb_certifications", "english_level",
-    "has_german", "nb_technical_skills", "log_years_exp", "exp_edu_score",
-    "cert_density", "multilingual_score", "method_tech_ratio", "tech_per_year",
-    "career_depth", "is_it", "is_finance",
+    "exp_edu_score", "tech_per_year", "years_experience", 
+    "multilingual_score", "is_it", "education_level", "avg_job_duration"
 ]
 TARGET_COL = "passed_next_stage"
 

@@ -36,7 +36,8 @@ def engineer(df: pd.DataFrame) -> pd.DataFrame:
     nb_meth  = pd.to_numeric(df["nb_methods_skills"],    errors="coerce").fillna(0)
 
     df["log_years_exp"] = np.log1p(years).round(3)
-    df["exp_edu_score"] = (years * edu).round(2)
+    # Score de potentiel : Compétences par année d'expérience
+    df["potential_score"] = ((nb_tech + nb_meth + nb_cert) / (years + 1)).round(2)
     df["cert_density"] = (nb_cert / nb_jobs).round(3)
     eng_bonus = (eng_lvl >= 4).astype(int)
     df["multilingual_score"] = (nb_lang + eng_bonus).round(0)
