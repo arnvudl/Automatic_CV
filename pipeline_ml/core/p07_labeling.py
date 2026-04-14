@@ -9,7 +9,7 @@ from pathlib import Path
 # CONFIG (Adaptée pour core/labeling.py)
 # ==============================================================
 ROOT = Path(__file__).parent.parent.parent
-DATA_PATH = ROOT / "data" / "processed" / "dataset.csv"
+DATA_PATH = ROOT / "data" / "processed" / "features.csv"
 
 def main():
     if not DATA_PATH.exists():

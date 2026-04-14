@@ -10,25 +10,25 @@ from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import precision_recall_curve, classification_report
 from sklearn.preprocessing import StandardScaler
-from imblearn.pipeline import Pipeline
+from sklearn.pipeline import Pipeline
 
 # CONFIG
 ROOT = Path(__file__).parent.parent.parent
-DATA_PATH    = ROOT / "data" / "processed" / "dataset.csv"
+DATA_PATH    = ROOT / "data" / "processed" / "features.csv"
 MODELS_DIR   = ROOT / "models"
 REPORTS_DIR  = ROOT / "reports"
 RANDOM_STATE = 42
 
 # On ré-introduit le potentiel pour ne pas rater les futurs talents
 V5_FEATURES = [
-    "years_experience", 
-    "avg_job_duration", 
-    "education_level", 
-    "potential_score", # <-- L'atout des juniors !
-    "nb_languages", 
+    "years_experience",
+    "avg_job_duration",
+    "education_level",
+    "potential_score",
+    "junior_potential",       # interaction is_junior × potential_score — boost juniors à fort potentiel
+    "has_multiple_languages",
     "career_depth",
-    "is_it", 
-    "is_finance"
+    "is_it"
 ]
 
 def load_data():

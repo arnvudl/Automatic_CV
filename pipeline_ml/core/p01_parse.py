@@ -1,5 +1,5 @@
 """
-parse.py — Parsing et pseudonymisation des CV pour l'entraînement ML (Refactored)
+p01_parse.py - CV Parsing
 """
 
 import os
@@ -9,9 +9,10 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Optional
 
 # ==============================================================
-# CONFIG (Adaptée pour core/parse.py)
+# CONFIG
 # ==============================================================
 ROOT = Path(__file__).parent.parent.parent
 RAW_FOLDER = ROOT / "data" / "raw"
@@ -20,8 +21,6 @@ LABELS_FILE = Path(__file__).parent.parent / "config" / "student_labels.csv"
 
 TODAY = datetime.today()
 MAX_WORKERS = min(8, (os.cpu_count() or 1) * 2)
-
-# ... (les fonctions de parsing _calculate_age, _get_sector, etc. restent identiques)
 
 LEVEL_MAP = {'a1': 1, 'a2': 2, 'b1': 3, 'b2': 4, 'c1': 5, 'c2': 6}
 SENIOR_KW = {'senior', 'lead', 'manager', 'director', 'head', 'chief', 'principal'}
@@ -35,22 +34,23 @@ RE_PHONE        = re.compile(r"Phone:\s*(.*)", re.IGNORECASE)
 RE_TARGET_ROLE  = re.compile(r"Target Role:\s*(.*)", re.IGNORECASE)
 RE_STATUS       = re.compile(r"(?:Status|Decision):\s*(.*)", re.IGNORECASE)
 RE_SECTIONS     = re.compile(r"(Education|Experience|Skills|Languages|Certifications):", re.IGNORECASE)
+_SEP = r"(?:\s*[-—]\s*)"   # tiret court OU tiret long (em dash)
 RE_JOB          = re.compile(
-    r"(?P<title>.+?)\s*—\s*(?P<company>.+?)\s*—\s*.+?\s*—\s*"
+    r"(?P<title>.+?)" + _SEP + r"(?P<company>.+?)" + _SEP + r".+?" + _SEP +
     r"(?P<start>[A-Za-z0-9\-]+)\s+to\s+(?P<end>[A-Za-z0-9\-]+)"
 )
 RE_TECH         = re.compile(r"Technical:\s*(.*)", re.IGNORECASE)
 RE_METH         = re.compile(r"Methods:\s*(.*)", re.IGNORECASE)
 RE_MAN          = re.compile(r"Management:\s*(.*)", re.IGNORECASE)
 
-def _calculate_age(dob_str: str) -> int | None:
+def _calculate_age(dob_str: str) -> Optional[int]:
     try:
         dob = datetime.strptime(dob_str.strip(), "%Y-%m-%d")
         return TODAY.year - dob.year - ((TODAY.month, TODAY.day) < (dob.month, dob.day))
     except (ValueError, AttributeError):
         return None
 
-def _get_sector(target_role: str | None) -> str:
+def _get_sector(target_role: Optional[str]) -> str:
     if not target_role:
         return "Other"
     role = target_role.lower()
@@ -64,7 +64,7 @@ def _get_sector(target_role: str | None) -> str:
         return "Public"
     return "Other"
 
-def _get_education_level(diploma: str | None) -> int:
+def _get_education_level(diploma: Optional[str]) -> int:
     if not diploma:
         return 1
     d = diploma.lower()
@@ -76,7 +76,7 @@ def _get_education_level(diploma: str | None) -> int:
         return 2
     return 1
 
-def _parse_date(date_str: str) -> datetime | None:
+def _parse_date(date_str: str) -> Optional[datetime]:
     s = date_str.strip().lower()
     if s == 'present':
         return TODAY
@@ -88,11 +88,11 @@ def _parse_date(date_str: str) -> datetime | None:
 def _is_senior(title: str) -> bool:
     return bool(SENIOR_KW.intersection(title.lower().split()))
 
-def _split_sections(content: str) -> dict[str, str]:
+def _split_sections(content: str) -> dict:
     parts = RE_SECTIONS.split(content)
     return {parts[i]: parts[i + 1].strip() for i in range(1, len(parts) - 1, 2)}
 
-def parse_cv(filepath: Path, labels_dict: dict) -> tuple[dict, dict]:
+def parse_cv(filepath: Path, labels_dict: dict) -> tuple:
     content = filepath.read_text(encoding='utf-8')
     filename = filepath.stem
 
@@ -145,9 +145,9 @@ def parse_cv(filepath: Path, labels_dict: dict) -> tuple[dict, dict]:
     education_level = 1
     education_field = None
     if "Education" in sections:
-        lines = [l for l in sections["Education"].split('\n') if l.strip()]
+        lines = [line for line in sections["Education"].split('\n') if line.strip()]
         if lines:
-            parts = [p.strip() for p in lines[0].split('—')]
+            parts = [p.strip() for p in re.split(r'[-—]', lines[0])]
             education_level = _get_education_level(parts[0] if parts else None)
             education_field = parts[1] if len(parts) > 1 else None
 
@@ -191,8 +191,8 @@ def parse_cv(filepath: Path, labels_dict: dict) -> tuple[dict, dict]:
     nb_languages = has_english = has_french = has_german = has_luxembourgish = 0
     english_level = 0
     if "Languages" in sections:
-        for line in (l for l in sections["Languages"].split('\n') if l.strip()):
-            parts = [p.strip() for p in line.split('—')]
+        for line in (ln for ln in sections["Languages"].split('\n') if ln.strip()):
+            parts = [p.strip() for p in re.split(r'[-—]', line)]
             nb_languages += 1
             lang = parts[0].lower()
             lvl  = parts[1].lower() if len(parts) > 1 else ""
@@ -208,7 +208,7 @@ def parse_cv(filepath: Path, labels_dict: dict) -> tuple[dict, dict]:
 
     nb_certifications = 0
     if "Certifications" in sections:
-        nb_certifications = len([l for l in sections["Certifications"].split('\n') if l.strip()])
+        nb_certifications = len([ln for ln in sections["Certifications"].split('\n') if ln.strip()])
 
     identity_row = {
         'cv_id':  cv_id,
@@ -261,7 +261,7 @@ def main():
 
     PROCESSED_FOLDER.mkdir(parents=True, exist_ok=True)
 
-    labels_dict: dict = {}
+    labels_dict = {}
     if LABELS_FILE.exists():
         with LABELS_FILE.open(encoding='utf-8') as f:
             for row in csv.DictReader(f):
@@ -274,8 +274,8 @@ def main():
         print("Aucun fichier .txt trouvé dans", RAW_FOLDER)
         return
 
-    identities: list[dict] = []
-    features:   list[dict] = []
+    identities = []
+    features   = []
     errors = 0
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
@@ -310,7 +310,7 @@ def main():
         writer.writeheader()
         writer.writerows(identities)
 
-    print(f"CV traités : {len(features)} | Fichiers générés dans {PROCESSED_FOLDER}")
+    print(f"CV traites : {len(features)} | Fichiers generes dans {PROCESSED_FOLDER}")
 
 if __name__ == "__main__":
     main()
