@@ -1,66 +1,56 @@
-# Rapport de Projet : Système de Tri de CV Automatisé (v6)
+# Rapport de Projet : CV Screening
 
 **Candidats :** Tom Perez Le Tiec | Arnaud Leroy  
-**Date :** 14 Avril 2026  
-**Version du Modèle :** v6 (Potential & Fair Optimized — Log-Transformed Features)
+**Date :** 14 Avril 2026
 
 ---
 
-## 1. Synthèse du Projet
-L'objectif de ce projet est de concevoir un système de tri (ranking) de CV capable d'identifier les profils les plus pertinents pour un processus de recrutement. Contrairement à un système de décision automatique, ce modèle sert d'assistant au recruteur pour prioriser l'examen des candidatures.
-
-L'éthique algorithmique a été placée au centre de la démarche. Nous avons fait le choix délibéré de privilégier la neutralité et la réduction des biais systémiques, même si cela a nécessité un compromis sur la performance brute du modèle.
-
----
-
-## 2. Architecture Technique
+## Architecture Technique
 
 ### Modèle Utilisé
-Le modèle retenu est une Régression Logistique avec une forte régularisation (C=0.1). Ce choix assure la stabilité des prédictions sur un dataset de 200 CV et permet de fournir des probabilités claires pour le classement. La gestion du déséquilibre des classes (ratio 74.5% / 25.5%, signalé par l'EDA) est assurée par le paramètre `class_weight='balanced'`.
+On utilise une Régression Logistique avec une régularisation assez forte (C=0.1). C'est simple, stable, et ça donne des probabilités directement utilisables pour classer les candidats. Le dataset est déséquilibré (74.5% rejetés / 25.5% invités), donc on a mis `class_weight='balanced'` pour que le modèle ne ignore pas les profils invités.
 
-### Variables Utilisées (Robust Features — 7 variables)
-Nous avons sélectionné 7 variables pour leur stabilité et leur pertinence métier, extraites du dataset `features.csv` :
+### Variables Utilisées (7 variables)
 
-| Variable | Description | SHAP | Motivation |
+| Variable | Description | SHAP | Pourquoi |
 |---|---|---|---|
-| `years_experience` | Nombre total d'années d'expérience | 0.442 | Signal le plus fort |
-| `education_level` | Niveau d'études (encodé 1-4) | 0.359 | Stable, peu d'outliers |
-| `has_multiple_languages` | 1 si ≥ 2 langues, 0 sinon | 0.300 | Remplace `nb_languages` — variable quasi-binaire dans ce dataset |
+| `years_experience` | Années d'expérience totales | 0.442 | Variable la plus importante |
+| `education_level` | Niveau d'études (1-4) | 0.359 | Stable, peu d'outliers |
+| `has_multiple_languages` | 1 si ≥ 2 langues | 0.300 | Remplace `nb_languages` (variable quasi-binaire dans ce dataset) |
 | `potential_score` | (Compétences + Méthodes + Certif) / (Exp+1) | 0.151 | Valorise les profils à fort potentiel |
 | `avg_job_duration` | Durée moyenne par poste | 0.088 | Stabilité de carrière |
-| `junior_potential` | `is_junior × potential_score` | 0.076 | Interaction : booste les juniors à fort potentiel |
+| `junior_potential` | `is_junior × potential_score` | 0.076 | Booste les juniors à fort potentiel |
 | `is_it` | 1 si secteur Informatique | 0.031 | 78.5% du dataset |
 | `career_depth` | Expérience × Durée moyenne | 0.002 | Profondeur de carrière |
 
-> **Note :** `is_finance` supprimée (colinéarité parfaite avec `is_it`). `nb_languages` remplacé par `has_multiple_languages` (85% des CV ont exactement 2 langues). `junior_potential` est un terme d'interaction (`years_experience < 3` × `potential_score`) permettant à la régression logistique de valoriser différemment le potentiel selon le stade de carrière.
+> **Note :** `is_finance` supprimée (colinéarité parfaite avec `is_it`). `nb_languages` remplacé par `has_multiple_languages` (85% des CV ont exactement 2 langues). `junior_potential` est un terme d'interaction (`years_experience < 3` × `potential_score`) pour valoriser différemment le potentiel selon le stade de carrière.
 
 ---
 
-## 3. Feature Engineering
-L'étape d'ingénierie des variables a été le pivot de notre approche éthique et technique.
+## Feature Engineering
 
-- **Suppression du score combiné (`exp_edu_score`)** : Initialement utilisé, ce score multipliait l'expérience par le diplôme, créant un biais massif contre les jeunes talents.
-- **Introduction du Potential Score** : `potential_score = (Compétences + Méthodes + Certifications) / (Expérience+1)`. Valorise la vitesse d'apprentissage des profils juniors.
-- **[v6] `junior_potential = is_junior × potential_score`** : Terme d'interaction permettant à la régression logistique de valoriser différemment le potential_score selon le stade de carrière. Sans cette feature, le modèle applique le même poids à `potential_score` pour tous les profils. Avec elle, un junior à fort potentiel reçoit un signal additionnel qui monte sa probabilité d'invitation.
-- **Suppression de `is_finance`** : Colinéarité parfaite avec `is_it` (tous les CV sont IT ou Finance).
-- **Log-transform de `avg_job_duration`** : L'exploration EDA a révélé une asymétrie de 1.61 et 17.5% d'outliers sur cette variable. Le log-transform stabilise la distribution avant l'entraînement de la régression logistique.
-- **`nb_languages` → `has_multiple_languages`** : L'EDA montre que 95% des CV ont exactement 1 ou 2 langues. La variable continue n'apporte pas plus de signal qu'une variable binaire, tout en introduisant une skewness artificielle (-1.97). La version binaire est plus robuste et interprétable.
-- **Winsorisation (percentile 5-95)** : Appliquée sur `years_experience`, `avg_job_duration`, `nb_certifications`, `nb_technical_skills`, `nb_methods_skills` pour limiter l'influence des valeurs extrêmes avant le calcul des features dérivées.
-
----
-
-## 4. Comparaison : Modèle IA vs Labels Étudiants
-
-| Source | Taux d'Invitation | Écart de Sévérité |
-| :--- | :--- | :--- |
-| Labels Étudiants (Heuristique) | 25.5% | Référence |
-| Modèle IA (v6) | 30.0% | +4.5 pp |
-
-**Analyse :** Le modèle v6 invite 30% des candidats contre 25.5% pour les labels étudiants, soit un écart de **+4.5 points de pourcentage**. Cet écart reflète le choix délibéré d'un seuil légèrement permissif (0.601) pour préserver un recall minimal sur les profils juniors (Recall=0.222), qui seraient autrement systématiquement exclus par la feature `years_experience`.
+- **Suppression de `exp_edu_score`** : Ce score (expérience × diplôme) pénalisait massivement les jeunes. On l'a enlevé.
+- **`potential_score`** = `(Compétences + Méthodes + Certifications) / (Expérience+1)` : ça permet de valoriser quelqu'un qui progresse vite même avec peu d'expérience.
+- **`junior_potential`** : Terme d'interaction qui donne un signal supplémentaire aux juniors à fort potentiel. Sans ça, le modèle applique le même poids à `potential_score` pour tout le monde.
+- **Suppression de `is_finance`** : Colinéarité parfaite avec `is_it`.
+- **Log-transform de `avg_job_duration`** : L'EDA montrait une skewness de 1.61 et 17.5% d'outliers. Le log stabilise la distribution.
+- **`nb_languages` → `has_multiple_languages`** : 95% des CV ont 1 ou 2 langues. La variable binaire est plus robuste et plus simple.
+- **Winsorisation (percentile 5-95)** : Appliquée sur plusieurs variables pour limiter l'influence des valeurs extrêmes.
 
 ---
 
-## 5. Métriques de Performance
+## Comparaison : Modèle IA vs Labels
+
+| Source             | Taux d'Invitation | Écart |
+|:-------------------| :--- | :--- |
+| Labels             | 25.5% | Référence |
+| Modèle IA (v6)     | 30.0% | +4.5 pp |
+
+Le modèle qu'on a fait invite un peu plus que le dataset de base (30% vs 25.5%). C'est plus ou moins voulu : on a choisi un seuil légèrement permissif (0.601) pour que les juniors ne soient pas tous éliminés à cause de `years_experience`.
+
+---
+
+## Métriques de Performance
 
 ### Sur le dataset complet (200 CV)
 
@@ -71,16 +61,16 @@ L'étape d'ingénierie des variables a été le pivot de notre approche éthique
 | Accuracy | 0.765 |
 | F1-Score (Invité) | 0.577 |
 
-### Cross-Validation 5-Fold (robustesse)
+### Cross-Validation 5-Fold
 
 | Métrique | Moyenne | Écart-type |
 |---|---|---|
 | **ROC-AUC** | **0.760** | ±0.021 |
 | **F1-Score (Invité)** | **0.561** | ±0.059 |
 
-> Pour un outil de **tri** (ranking par probabilité), un ROC-AUC de 0.780 signifie que le modèle classe correctement 78% des paires Invité/Rejeté — performance maintenue par rapport à v5 (0.782) malgré la refonte EDA.
+> Un ROC-AUC de 0.780 signifie que le modèle classe correctement 78% des paires Invité/Rejeté. C'est stable par rapport à v5 (0.782) malgré la refonte EDA.
 
-### Matrice de Confusion (dataset complet, 200 CV)
+### Matrice de Confusion (200 CV)
 
 |  | Prédit Rejeté | Prédit Invité |
 |---|---|---|
@@ -95,7 +85,7 @@ L'étape d'ingénierie des variables a été le pivot de notre approche éthique
 
 ---
 
-## 6. Importance des Variables (SHAP)
+## Importance des Variables (SHAP)
 
 | Rang | Variable | Impact SHAP |
 |---|---|---|
@@ -112,9 +102,9 @@ L'étape d'ingénierie des variables a été le pivot de notre approche éthique
 
 ---
 
-## 7. Audit d'Équité (Ethics First)
+## Audit d'Équité
 
-L'audit final, réalisé en fusionnant `features.csv` avec `identities.csv`, donne les résultats suivants :
+On a fusionné `features.csv` avec `identities.csv` pour vérifier les biais.
 
 ### Par Genre
 
@@ -123,7 +113,7 @@ L'audit final, réalisé en fusionnant `features.csv` avec `identities.csv`, don
 | Femmes | 89 | 0.727 | 0.593 |
 | Hommes | 111 | 0.552 | 0.485 |
 
-Avantage pour les femmes (+17.5% recall), précision également meilleure. À surveiller sur un dataset plus large.
+Le modèle favorise un peu les femmes (+17.5% recall). À surveiller sur un dataset plus grand.
 
 ### Par Âge
 
@@ -132,15 +122,11 @@ Avantage pour les femmes (+17.5% recall), précision également meilleure. À su
 | Adulte (30-45) | 132 | 0.714 | 0.536 |
 | Jeune (<30) | 68 | 0.222 | 0.500 |
 
-**Amélioration v6 :** Le recall des jeunes (<30) passe de 0.111 (v5) à 0.222 grâce à la feature `junior_potential` (terme d'interaction). 2 juniors sur 9 qui méritent d'être vus sont maintenant identifiés, contre 1 sur 9 précédemment. La précision (0.500) confirme que les juniors sélectionnés sont pertinents.
-
-**Alerte :** Absence totale de profils Senior (>45) dans le dataset — le modèle n'a pas été entraîné sur ce segment.
+**Alerte :** Pas de profils Senior (>45) dans le dataset -> le modèle n'a pas été entraîné sur ce segment.
 
 ![Équité](plots/fairness_metrics.png)
 
-### Par Pays (Localité via téléphone)
-
-L'audit par pays révèle des disparités de recall, bien que sur des échantillons réduits (n ~ 20 par pays) :
+### Par Pays
 
 | Pays | n | Recall | Précision |
 |---|---|---|---|
@@ -155,15 +141,13 @@ L'audit par pays révèle des disparités de recall, bien que sur des échantill
 | France | 18 | 0.429 | 0.600 |
 | Irlande | 26 | 0.429 | 0.300 |
 
-**Analyse :** Les disparités de recall par pays subsistent mais se sont réduites par rapport à v5. Italie et Portugal (Recall=0.25 en v5) atteignent 0.500. Ces écarts reflètent des différences de distribution des variables d'entrée selon les provenances — le modèle ne voit pas le pays.
+Le modèle ne voit pas le pays, les écarts viennent des distributions différentes des variables selon les origines.
 
 ![Équité par Pays](plots/fairness_country.png)
 
 ---
 
-## 8. Conclusion
-Ce projet démontre qu'il est possible de concilier performance prédictive et éthique de recrutement. En stabilisant le modèle par la régularisation, en créant des variables de potentiel équitables et en supprimant les variables redondantes, nous fournissons un outil de tri responsable et transparent.
+## Conclusion
+Le modèle fonctionne bien pour ce qu'on lui demande : trier des CV par ordre de priorité.
 
-La version v6 apporte un cycle complet d'analyse exploratoire (EDA) intégré au pipeline (`p00_exploration.py`), ayant conduit à deux améliorations concrètes : le log-transform de `avg_job_duration` (skewness 1.61) et la binarisation de `nb_languages` (variable quasi-constante). Ces changements renforcent la robustesse statistique du modèle sans en modifier l'interprétabilité.
-
-Le modèle est conçu comme un **assistant au recruteur** : il priorise les candidatures par score de probabilité et ne prend aucune décision finale autonome.
+Il reste des limites (pas de seniors dans les données, disparités par pays)
