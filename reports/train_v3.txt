@@ -1,0 +1,54 @@
+RAPPORT ENTRAÎNEMENT V3 — Features Anti-Biais
+============================================================
+Dataset : 500 CV  |  Train : 400  |  Test : 100
+Positifs test : 20 (20.0%)
+
+── BASELINE v5 ─────────────────────────────────────────────────────
+  Features (8) : ['years_experience', 'avg_job_duration', 'education_level', 'potential_score', 'junior_potential', 'has_multiple_languages', 'career_depth', 'is_it']
+  Seuil adultes : 0.614  |  Seuil juniors : 0.374
+  AUC : 0.755
+  Par genre :
+    Female    n= 51  Recall=0.500  Precision=0.333
+    Male      n= 49  Recall=0.800  Precision=0.444
+  Par âge :
+    Junior (<30)    n= 34  Recall=0.400  Precision=0.286
+    Adulte (30+)    n= 66  Recall=0.733  Precision=0.423
+  Importance features (|coef| × std) :
+    years_experience             0.6079
+    education_level              0.4534
+    has_multiple_languages       0.3790
+    career_depth                 0.1832
+    potential_score              0.1337
+    is_it                        0.0704
+    avg_job_duration             0.0654
+    junior_potential             0.0572
+
+── MODÈLE v3 (exp_per_year_of_age + field_match) ─────────────────────────────────────────────────────
+  Features (9) : ['exp_per_year_of_age', 'avg_job_duration', 'education_level', 'potential_score', 'junior_potential', 'has_multiple_languages', 'career_depth', 'is_it', 'field_match']
+  Seuil adultes : 0.480  |  Seuil juniors : 0.412
+  AUC : 0.762
+  Par genre :
+    Female    n= 51  Recall=0.800  Precision=0.400
+    Male      n= 49  Recall=0.900  Precision=0.409
+  Par âge :
+    Junior (<30)    n= 34  Recall=0.600  Precision=0.375
+    Adulte (30+)    n= 66  Recall=0.933  Precision=0.412
+  Importance features (|coef| × std) :
+    potential_score              0.4755
+    career_depth                 0.4591
+    education_level              0.4549
+    has_multiple_languages       0.3603
+    junior_potential             0.1578
+    field_match                  0.1439
+    is_it                        0.1438
+    exp_per_year_of_age          0.0777
+    avg_job_duration             0.0107
+
+── RÉSUMÉ COMPARATIF ─────────────────────────────────────────
+Métrique                              v5 (baseline)  v3 (anti-biais)        Δ
+  AUC global                                  0.755            0.762 +  0.007
+  Recall Female                               0.500            0.800 +  0.300
+  Recall Male                                 0.800            0.900 +  0.100
+  Écart genre (Male - Female)                 0.300            0.100  -0.200
+  Recall Junior                               0.400            0.600 +  0.200
+  Precision Junior                            0.286            0.375 +  0.089
