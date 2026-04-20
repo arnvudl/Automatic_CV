@@ -8,7 +8,7 @@ from pathlib import Path
 from sklearn.metrics import confusion_matrix, roc_curve, auc, recall_score
 
 # CONFIG
-ROOT = Path("..")
+ROOT = Path(__file__).parent.parent
 FEATURES_PATH   = ROOT / "data" / "processed" / "features.csv"
 IDENTITIES_PATH = ROOT / "data" / "processed" / "identities.csv"
 REPORTS_DIR     = ROOT / "reports" / "plots"
@@ -46,6 +46,7 @@ model = joblib.load(ROOT / "models" / "model.pkl")
 scaler = joblib.load(ROOT / "models" / "scaler.pkl")
 features = joblib.load(ROOT / "models" / "feature_cols.pkl")
 threshold = joblib.load(ROOT / "models" / "threshold.pkl")
+threshold_junior = joblib.load(ROOT / "models" / "threshold_junior.pkl") if (ROOT / "models" / "threshold_junior.pkl").exists() else threshold
 
 target = "label" if "label" in df.columns else "passed_next_stage"
 df = df[df[target].notna()].copy()
@@ -53,7 +54,10 @@ X = df[features].values
 X_s = scaler.transform(X)
 y_true = df[target].values.astype(int)
 y_proba = model.predict_proba(X_s)[:, 1]
-y_pred = (y_proba >= threshold).astype(int)
+import numpy as np
+age_num = pd.to_numeric(df["age"], errors="coerce").fillna(30)
+is_junior = (age_num < 30).values
+y_pred = np.where(is_junior, (y_proba >= threshold_junior).astype(int), (y_proba >= threshold).astype(int))
 
 # 1. MATRICE DE CONFUSION
 plt.figure(figsize=(8, 6))
@@ -79,11 +83,14 @@ plt.savefig(REPORTS_DIR / "roc_curve.png")
 plt.close()
 
 # 3. ÉQUITÉ (RECALL PAR GROUPE)
-df['age_group'] = df['age'].apply(lambda x: "Jeune (<30)" if x < 30 else "Adulte (30+)")
+df['age_group'] = df['age'].apply(lambda x: "Jeune (<30)" if float(x) < 30 else "Adulte (30+)" if pd.notna(x) else "Adulte (30+)")
 def get_recall(x):
     yt = x[target].values.astype(int)
     if len(yt) < 1: return 0.0
-    yp = (model.predict_proba(scaler.transform(x[features].values))[:,1] >= threshold).astype(int)
+    proba = model.predict_proba(scaler.transform(x[features].values))[:,1]
+    age_g = pd.to_numeric(x['age'], errors='coerce').fillna(30)
+    thr = np.where(age_g < 30, threshold_junior, threshold)
+    yp = (proba >= thr).astype(int)
     return recall_score(yt, yp, zero_division=0)
 
 recall_gender = df.groupby('gender').apply(get_recall)
@@ -125,5 +132,38 @@ plt.xlabel("Impact moyen sur la prédiction")
 plt.tight_layout()
 plt.savefig(REPORTS_DIR / "feature_importance.png")
 plt.close()
+
+# 5. MATRICES DE CONFUSION PAR SOUS-GROUPE
+from sklearn.metrics import precision_score as _prec
+
+def plot_cm_subgroup(mask, title, filename):
+    yt = y_true[mask]
+    yp = y_pred[mask]
+    if len(yt) < 2 or yt.sum() == 0:
+        return
+    cm_sg = confusion_matrix(yt, yp, labels=[0, 1])
+    recall   = recall_score(yt, yp, zero_division=0)
+    prec     = _prec(yt, yp, zero_division=0)
+    fig, ax = plt.subplots(figsize=(5, 4))
+    sns.heatmap(cm_sg, annot=True, fmt='d', cmap='Blues',
+                xticklabels=['Rejeté', 'Invité'],
+                yticklabels=['Rejeté', 'Invité'], ax=ax)
+    ax.set_title(f"{title}\nRecall={recall:.2f}  Precision={prec:.2f}", fontsize=12)
+    ax.set_ylabel('Réel')
+    ax.set_xlabel('Prédit')
+    plt.tight_layout()
+    plt.savefig(REPORTS_DIR / filename, dpi=150)
+    plt.close()
+
+# Par genre
+gender_col = df["gender"].fillna("Inconnu")
+for genre, fname in [("Female", "cm_gender_female.png"), ("Male", "cm_gender_male.png")]:
+    plot_cm_subgroup((gender_col == genre).values, f"Matrice — {genre}", fname)
+
+# Par âge (3 groupes cohérents avec l'audit)
+age_num = pd.to_numeric(df["age"], errors="coerce").fillna(30)
+plot_cm_subgroup((age_num < 30).values,                          "Matrice — Jeunes (<30)",    "cm_age_jeune.png")
+plot_cm_subgroup(((age_num >= 30) & (age_num <= 45)).values,     "Matrice — Adultes (30-45)", "cm_age_adulte.png")
+plot_cm_subgroup((age_num > 45).values,                          "Matrice — Seniors (>45)",   "cm_age_senior.png")
 
 print("Graphiques finaux générés sur FEATURES.CSV + IDENTITIES.CSV")

@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CV-Intelligence — Espace RH</title>
+  <style>
+    /* ── Reset & Variables ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --blue:    #2563EB;
+      --green:   #16A34A;
+      --red:     #DC2626;
+      --orange:  #D97706;
+      --bg:      #F1F5F9;
+      --card:    #FFFFFF;
+      --text:    #1E293B;
+      --muted:   #64748B;
+      --border:  #E2E8F0;
+      --radius:  10px;
+    }
+    body { font-family: Inter, system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* ── Header ── */
+    header {
+      background: linear-gradient(135deg, var(--blue), #1D4ED8);
+      padding: 18px 32px; display: flex; align-items: center; justify-content: space-between;
+    }
+    header h1 { color: white; font-size: 20px; font-weight: 800; }
+    header span { color: #BFDBFE; font-size: 13px; }
+    .badge { background: #FFFFFF25; color: white; border-radius: 20px; padding: 5px 14px; font-size: 12px; }
+
+    /* ── Layout ── */
+    main { max-width: 1300px; margin: 0 auto; padding: 28px 24px; }
+
+    /* ── KPIs ── */
+    .kpis { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 28px; }
+    .kpi {
+      background: var(--card); border-radius: var(--radius); padding: 18px 22px;
+      flex: 1; min-width: 150px; box-shadow: 0 1px 6px rgba(0,0,0,.07);
+    }
+    .kpi .label { font-size: 12px; color: var(--muted); font-weight: 500; margin-bottom: 4px; }
+    .kpi .value { font-size: 30px; font-weight: 800; }
+    .kpi.blue  { border-top: 4px solid var(--blue);   } .kpi.blue  .value { color: var(--blue);   }
+    .kpi.green { border-top: 4px solid var(--green);  } .kpi.green .value { color: var(--green);  }
+    .kpi.red   { border-top: 4px solid var(--red);    } .kpi.red   .value { color: var(--red);    }
+    .kpi.orange{ border-top: 4px solid var(--orange); } .kpi.orange .value { color: var(--orange); }
+
+    /* ── Filters ── */
+    .filters {
+      background: var(--card); border-radius: var(--radius); padding: 16px 20px;
+      display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;
+      box-shadow: 0 1px 6px rgba(0,0,0,.07); margin-bottom: 20px;
+    }
+    .filter-group { display: flex; flex-direction: column; gap: 4px; }
+    .filter-group label { font-size: 12px; color: var(--muted); font-weight: 500; }
+    .filters select, .filters input[type=range], .filters input[type=text] {
+      border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px;
+      font-size: 13px; color: var(--text); background: var(--bg); cursor: pointer;
+    }
+    .filters input[type=range] { padding: 0; width: 120px; cursor: pointer; }
+    .btn {
+      background: var(--blue); color: white; border: none; border-radius: 6px;
+      padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .btn:hover { background: #1D4ED8; }
+    .btn-secondary { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: var(--border); }
+
+    /* ── Table ── */
+    .table-wrap {
+      background: var(--card); border-radius: var(--radius); overflow: hidden;
+      box-shadow: 0 1px 6px rgba(0,0,0,.07);
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    thead { background: #F8FAFC; }
+    th {
+      padding: 12px 14px; text-align: left; font-weight: 600; color: var(--muted);
+      font-size: 11px; text-transform: uppercase; letter-spacing: .5px;
+      border-bottom: 1px solid var(--border); cursor: pointer; user-select: none;
+      white-space: nowrap;
+    }
+    th:hover { color: var(--blue); }
+    th .sort-icon { margin-left: 4px; opacity: .5; }
+    td { padding: 12px 14px; border-bottom: 1px solid #F1F5F9; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #F8FAFC; }
+
+    /* ── Score bar ── */
+    .score-cell { display: flex; align-items: center; gap: 8px; }
+    .score-bar-bg { flex: 1; height: 6px; background: var(--border); border-radius: 99px; }
+    .score-bar { height: 6px; border-radius: 99px; }
+    .score-num { font-weight: 700; font-size: 13px; width: 38px; }
+
+    /* ── Decision pill ── */
+    .pill {
+      display: inline-block; padding: 3px 10px; border-radius: 99px;
+      font-size: 11px; font-weight: 700; letter-spacing: .3px; white-space: nowrap;
+    }
+    .pill-invite { background: #DCFCE7; color: var(--green); }
+    .pill-reject { background: #FEE2E2; color: var(--red);   }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45);
+      z-index: 100; align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--card); border-radius: 14px; padding: 32px; max-width: 560px;
+      width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,.2); position: relative;
+    }
+    .modal h2 { font-size: 18px; font-weight: 800; margin-bottom: 20px; }
+    .modal-close { position: absolute; top: 16px; right: 18px; cursor: pointer; font-size: 20px; color: var(--muted); background: none; border: none; }
+    .modal-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+    .modal-row:last-of-type { border-bottom: none; }
+    .modal-row .key { color: var(--muted); }
+    .modal-row .val { font-weight: 600; }
+    .modal-score { text-align: center; margin: 20px 0 8px; }
+    .modal-score .big { font-size: 52px; font-weight: 900; }
+    .modal-score .sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+    .modal .pill { font-size: 14px; padding: 6px 18px; }
+
+    /* ── Upload zone ── */
+    .upload-section {
+      background: var(--card); border-radius: var(--radius); padding: 24px 24px 20px;
+      box-shadow: 0 1px 6px rgba(0,0,0,.07); margin-bottom: 24px;
+    }
+    .upload-section h2 { font-size: 15px; font-weight: 700; margin-bottom: 14px; }
+    .drop-zone {
+      border: 2px dashed var(--border); border-radius: var(--radius); padding: 28px;
+      text-align: center; cursor: pointer; transition: border-color .2s, background .2s;
+    }
+    .drop-zone:hover, .drop-zone.drag { border-color: var(--blue); background: #EFF6FF; }
+    .drop-zone p { color: var(--muted); font-size: 13px; margin-top: 6px; }
+    .drop-zone .icon { font-size: 32px; }
+    #upload-status { margin-top: 12px; font-size: 13px; padding: 10px 14px; border-radius: 7px; display: none; }
+    .status-ok  { background: #DCFCE7; color: var(--green); }
+    .status-err { background: #FEE2E2; color: var(--red); }
+
+    /* ── Loader ── */
+    #loader { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 3px; background: var(--blue); z-index: 999; animation: progress 1.5s ease infinite; }
+    @keyframes progress { 0%{width:0} 50%{width:70%} 100%{width:100%} }
+
+    .empty { text-align: center; color: var(--muted); padding: 40px; font-size: 14px; }
+  </style>
+</head>
+<body>
+<div id="loader"></div>
+
+<header>
+  <div>
+    <h1>CV-Intelligence</h1>
+    <span>Espace RH — Analyse automatisée des candidatures</span>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center">
+    <span class="badge" id="api-status">⏳ Connexion...</span>
+    <button class="btn btn-secondary" onclick="loadCandidates()" style="color:white;background:#FFFFFF20;border-color:#FFFFFF40">↻ Actualiser</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- Upload -->
+  <div class="upload-section">
+    <h2>Soumettre un CV manuellement</h2>
+    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('cv-file').click()">
+      <div class="icon">📄</div>
+      <strong>Glissez un fichier .txt ici</strong>
+      <p>ou cliquez pour choisir un fichier</p>
+      <input type="file" id="cv-file" accept=".txt" style="display:none" onchange="uploadCV(this.files[0])" />
+    </div>
+    <div id="upload-status"></div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpis" id="kpis">
+    <div class="kpi blue">  <div class="label">CVs reçus</div>   <div class="value" id="k-total">—</div>  </div>
+    <div class="kpi green"> <div class="label">Invités</div>      <div class="value" id="k-invited">—</div></div>
+    <div class="kpi red">   <div class="label">Rejetés</div>      <div class="value" id="k-rejected">—</div></div>
+    <div class="kpi orange"><div class="label">Taux invitation</div><div class="value" id="k-rate">—</div></div>
+  </div>
+
+  <!-- Filtres -->
+  <div class="filters">
+    <div class="filter-group">
+      <label>Décision</label>
+      <select id="f-decision" onchange="applyFilters()">
+        <option value="">Toutes</option>
+        <option value="invite">Invités ✅</option>
+        <option value="reject">Rejetés ❌</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Secteur</label>
+      <select id="f-sector" onchange="applyFilters()">
+        <option value="">Tous</option>
+        <option value="IT">IT</option>
+        <option value="Finance">Finance</option>
+        <option value="Industry">Industry</option>
+        <option value="Public">Public</option>
+        <option value="Other">Autre</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Score min : <span id="score-label">0%</span></label>
+      <input type="range" id="f-score" min="0" max="100" value="0"
+             oninput="document.getElementById('score-label').textContent=this.value+'%'; applyFilters()" />
+    </div>
+    <div class="filter-group">
+      <label>Recherche nom / email</label>
+      <input type="text" id="f-search" placeholder="ex : Martin, dupont@..." oninput="applyFilters()" style="width:200px" />
+    </div>
+    <button class="btn btn-secondary" onclick="resetFilters()">Réinitialiser</button>
+    <span style="margin-left:auto;font-size:13px;color:var(--muted);align-self:center" id="count-label"></span>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrap">
+    <table id="table">
+      <thead>
+        <tr>
+          <th onclick="sortBy('name')">Candidat <span class="sort-icon">↕</span></th>
+          <th onclick="sortBy('sector')">Secteur <span class="sort-icon">↕</span></th>
+          <th onclick="sortBy('years_experience')">Expérience <span class="sort-icon">↕</span></th>
+          <th onclick="sortBy('education_level')">Diplôme <span class="sort-icon">↕</span></th>
+          <th onclick="sortBy('score')">Score IA <span class="sort-icon">↕</span></th>
+          <th onclick="sortBy('decision')">Décision <span class="sort-icon">↕</span></th>
+          <th>Reçu le</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="empty" id="empty-msg" style="display:none">Aucun candidat trouvé.</div>
+  </div>
+
+</main>
+
+<!-- Modal détail -->
+<div class="modal-overlay" id="modal" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <h2 id="m-name">—</h2>
+    <div class="modal-score">
+      <div class="big" id="m-score-big">—</div>
+      <div class="sub">Score de probabilité d'invitation</div>
+      <div style="margin-top:10px" id="m-pill"></div>
+    </div>
+    <div id="m-rows"></div>
+  </div>
+</div>
+
+<script>
+  // ── Config ──────────────────────────────────────────────────
+  const API = "http://localhost:8000";
+  let allCandidates = [];
+  let sortKey = "score", sortAsc = false;
+
+  // ── Helpers ─────────────────────────────────────────────────
+  const fmt = v => v === "" || v == null ? "—" : v;
+  const fmtDate = iso => iso ? new Date(iso).toLocaleDateString("fr-FR", {day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}) : "—";
+  const eduLabel = n => ({1:"Bac / BTS",2:"Licence",3:"Master / MBA",4:"PhD"}[n] || fmt(n));
+  const scoreColor = s => s >= 0.6 ? "#16A34A" : s >= 0.4 ? "#D97706" : "#DC2626";
+
+  function scoreBar(score) {
+    const pct = Math.round((score||0)*100);
+    const col  = scoreColor(score||0);
+    return `<div class="score-cell">
+      <div class="score-num" style="color:${col}">${pct}%</div>
+      <div class="score-bar-bg"><div class="score-bar" style="width:${pct}%;background:${col}"></div></div>
+    </div>`;
+  }
+
+  function pill(decision) {
+    return decision === "invite"
+      ? `<span class="pill pill-invite">✅ Invité(e)</span>`
+      : `<span class="pill pill-reject">❌ Rejeté(e)</span>`;
+  }
+
+  // ── API ─────────────────────────────────────────────────────
+  async function checkStatus() {
+    try {
+      const r = await fetch(`${API}/`);
+      const d = await r.json();
+      const el = document.getElementById("api-status");
+      el.textContent = d.model_loaded ? "✅ API connectée" : "⚠️ Modèle manquant";
+      el.style.background = d.model_loaded ? "#16A34A40" : "#D9770640";
+    } catch {
+      document.getElementById("api-status").textContent = "❌ API hors ligne";
+      document.getElementById("api-status").style.background = "#DC262640";
+    }
+  }
+
+  async function loadStats() {
+    try {
+      const r = await fetch(`${API}/stats`);
+      const d = await r.json();
+      document.getElementById("k-total").textContent    = d.total;
+      document.getElementById("k-invited").textContent  = d.invited;
+      document.getElementById("k-rejected").textContent = d.rejected;
+      document.getElementById("k-rate").textContent     = d.invite_rate + "%";
+    } catch {}
+  }
+
+  async function loadCandidates() {
+    document.getElementById("loader").style.display = "block";
+    try {
+      const r = await fetch(`${API}/candidates`);
+      allCandidates = await r.json();
+      applyFilters();
+      await loadStats();
+    } catch (e) {
+      document.getElementById("tbody").innerHTML = `<tr><td colspan="8" class="empty">Impossible de contacter l'API (${e.message})</td></tr>`;
+    } finally {
+      document.getElementById("loader").style.display = "none";
+    }
+  }
+
+  // ── Filters & Sort ──────────────────────────────────────────
+  function applyFilters() {
+    const dec    = document.getElementById("f-decision").value;
+    const sec    = document.getElementById("f-sector").value.toLowerCase();
+    const minS   = parseFloat(document.getElementById("f-score").value) / 100;
+    const search = document.getElementById("f-search").value.toLowerCase();
+
+    let data = allCandidates.filter(c => {
+      if (dec  && c.decision !== dec) return false;
+      if (sec  && (c.sector||"").toLowerCase() !== sec) return false;
+      if ((c.score||0) < minS) return false;
+      if (search) {
+        const hay = `${c.name||""} ${c.email||""}`.toLowerCase();
+        if (!hay.includes(search)) return false;
+      }
+      return true;
+    });
+
+    data.sort((a,b) => {
+      const av = a[sortKey]??"", bv = b[sortKey]??"";
+      if (av < bv) return sortAsc ? -1 : 1;
+      if (av > bv) return sortAsc ?  1 : -1;
+      return 0;
+    });
+
+    document.getElementById("count-label").textContent = `${data.length} candidat${data.length>1?"s":""} affiché${data.length>1?"s":""}`;
+    renderTable(data);
+  }
+
+  function sortBy(key) {
+    if (sortKey === key) sortAsc = !sortAsc;
+    else { sortKey = key; sortAsc = key !== "score"; }
+    applyFilters();
+  }
+
+  function resetFilters() {
+    document.getElementById("f-decision").value = "";
+    document.getElementById("f-sector").value   = "";
+    document.getElementById("f-score").value    = "0";
+    document.getElementById("f-search").value   = "";
+    document.getElementById("score-label").textContent = "0%";
+    applyFilters();
+  }
+
+  // ── Render ──────────────────────────────────────────────────
+  function renderTable(data) {
+    const tbody = document.getElementById("tbody");
+    const empty = document.getElementById("empty-msg");
+    if (!data.length) { tbody.innerHTML = ""; empty.style.display = "block"; return; }
+    empty.style.display = "none";
+    tbody.innerHTML = data.map((c,i) => `
+      <tr>
+        <td>
+          <strong>${fmt(c.name)}</strong><br>
+          <span style="font-size:11px;color:var(--muted)">${fmt(c.email)}</span>
+        </td>
+        <td><span style="background:#EFF6FF;color:var(--blue);padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600">${fmt(c.sector)}</span></td>
+        <td>${c.years_experience ? c.years_experience+" ans" : "—"}</td>
+        <td>${eduLabel(c.education_level)}</td>
+        <td>${scoreBar(c.score)}</td>
+        <td>${pill(c.decision)}</td>
+        <td style="font-size:12px;color:var(--muted)">${fmtDate(c.received_at)}</td>
+        <td><button class="btn" style="padding:5px 12px;font-size:12px" onclick='openModal(${JSON.stringify(c).replace(/'/g,"&apos;")})'>Détail</button></td>
+      </tr>
+    `).join("");
+  }
+
+  // ── Modal ───────────────────────────────────────────────────
+  function openModal(c) {
+    document.getElementById("m-name").textContent = fmt(c.name);
+    const pct = Math.round((c.score||0)*100);
+    const col = scoreColor(c.score||0);
+    document.getElementById("m-score-big").textContent = pct + "%";
+    document.getElementById("m-score-big").style.color = col;
+    document.getElementById("m-pill").innerHTML = pill(c.decision);
+
+    const rows = [
+      ["Email",        fmt(c.email)],
+      ["Téléphone",    fmt(c.phone)],
+      ["Genre",        fmt(c.gender)],
+      ["Âge",          c.age ? c.age+" ans" : "—"],
+      ["Secteur",      fmt(c.sector)],
+      ["Poste ciblé",  fmt(c.target_role)],
+      ["Expérience",   c.years_experience ? c.years_experience+" ans" : "—"],
+      ["Diplôme",      eduLabel(c.education_level)],
+      ["Seuil utilisé",c.threshold_used ? (c.threshold_used*100).toFixed(0)+"%" : "—"],
+      ["Reçu le",      fmtDate(c.received_at)],
+    ];
+    document.getElementById("m-rows").innerHTML = rows.map(([k,v]) =>
+      `<div class="modal-row"><span class="key">${k}</span><span class="val">${v}</span></div>`
+    ).join("");
+    document.getElementById("modal").classList.add("open");
+  }
+
+  function closeModal() {
+    document.getElementById("modal").classList.remove("open");
+  }
+
+  // ── Upload ──────────────────────────────────────────────────
+  async function uploadCV(file) {
+    if (!file) return;
+    const status = document.getElementById("upload-status");
+    status.style.display = "block";
+    status.className = "";
+    status.textContent = "⏳ Analyse en cours...";
+
+    const form = new FormData();
+    form.append("file", file);
+
+    try {
+      const r = await fetch(`${API}/score`, { method: "POST", body: form });
+      if (!r.ok) throw new Error(`Erreur ${r.status}`);
+      const d = await r.json();
+      const dec = d.decision === "invite" ? "✅ INVITÉ(E)" : "❌ REJETÉ(E)";
+      status.className = d.decision === "invite" ? "status-ok" : "status-err";
+      status.innerHTML = `<strong>${fmt(d.name)}</strong> — Score : ${Math.round((d.score||0)*100)}% — Décision : <strong>${dec}</strong>`;
+      await loadCandidates();
+    } catch(e) {
+      status.className = "status-err";
+      status.textContent = `Erreur : ${e.message}`;
+    }
+  }
+
+  // ── Drag & drop ─────────────────────────────────────────────
+  const dz = document.getElementById("drop-zone");
+  dz.addEventListener("dragover", e => { e.preventDefault(); dz.classList.add("drag"); });
+  dz.addEventListener("dragleave", () => dz.classList.remove("drag"));
+  dz.addEventListener("drop", e => {
+    e.preventDefault(); dz.classList.remove("drag");
+    const f = e.dataTransfer.files[0];
+    if (f) uploadCV(f);
+  });
+
+  // ── Init ────────────────────────────────────────────────────
+  checkStatus();
+  loadCandidates();
+  setInterval(loadCandidates, 30000); // refresh auto toutes les 30s
+</script>
+</body>
+</html>

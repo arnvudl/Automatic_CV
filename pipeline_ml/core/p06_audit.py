@@ -15,10 +15,11 @@ from sklearn.metrics import recall_score, precision_score
 ROOT = Path(__file__).parent.parent.parent
 FEATURES_PATH   = ROOT / "data" / "processed" / "features.csv"
 IDENTITIES_PATH = ROOT / "data" / "processed" / "identities.csv"
-MODEL_PATH      = ROOT / "models" / "model.pkl"
-SCALER_PATH     = ROOT / "models" / "scaler.pkl"
-FEAT_COLS_PATH  = ROOT / "models" / "feature_cols.pkl"
-THRESHOLD_PATH  = ROOT / "models" / "threshold.pkl"
+MODEL_PATH           = ROOT / "models" / "model.pkl"
+SCALER_PATH          = ROOT / "models" / "scaler.pkl"
+FEAT_COLS_PATH       = ROOT / "models" / "feature_cols.pkl"
+THRESHOLD_PATH       = ROOT / "models" / "threshold.pkl"
+THRESHOLD_JR_PATH    = ROOT / "models" / "threshold_junior.pkl"
 REPORTS_DIR     = ROOT / "reports"
 
 TARGET_COL = "label"
@@ -78,12 +79,15 @@ def main():
     scaler = joblib.load(SCALER_PATH)
     feature_cols = joblib.load(FEAT_COLS_PATH)
     threshold = joblib.load(THRESHOLD_PATH)
+    threshold_junior = joblib.load(THRESHOLD_JR_PATH) if THRESHOLD_JR_PATH.exists() else threshold
 
     X = df[feature_cols].values.astype(float)
     X_s = scaler.transform(X)
     y_true = df[target].values.astype(int)
     y_proba = model.predict_proba(X_s)[:, 1]
-    y_pred = (y_proba >= threshold).astype(int)
+    age_num = pd.to_numeric(df["age"], errors="coerce").fillna(30)
+    is_junior = (age_num < 30).values
+    y_pred = np.where(is_junior, (y_proba >= threshold_junior).astype(int), (y_proba >= threshold).astype(int))
 
     with open(REPORTS_DIR / "audit.txt", "w", encoding="utf-8") as f:
         f.write("RAPPORT D'AUDIT FINAL — CV-Intelligence (v6)\n")

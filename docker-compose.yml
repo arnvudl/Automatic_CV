@@ -11,8 +11,8 @@ services:
     env_file:
       - .env
     volumes:
-      # Permet à l'API et au pipeline d'accéder au dossier data/
       - ./data:/app/data
+      - ./models:/app/models        # modèles ML (model.pkl, scaler.pkl, ...)
     restart: unless-stopped
 
   n8n:
@@ -21,8 +21,8 @@ services:
     ports:
       - "5678:5678"
     environment:
-      - N8N_HOST=n8n.lony.app
-      - WEBHOOK_URL=https://n8n.lony.app/
+      - N8N_HOST=${N8N_HOST:-localhost}
+      - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678/}
     volumes:
       - n8n_data:/home/node/.n8n
     restart: unless-stopped

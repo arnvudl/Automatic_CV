@@ -1,0 +1,270 @@
+{
+  "name": "Automatic CV",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "minutes", "minutesInterval": 2 }]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [0, 0],
+      "id": "38217bce-6dac-4ff8-be8f-7174c09a5b04",
+      "name": "Cron"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lit le dernier timestamp traité depuis la mémoire du workflow.\n// La première fois, on remonte 24h en arrière.\nconst stored = $getWorkflowStaticData('global');\nconst lastTs = stored.lastTimestamp || (Date.now() - 86400000);\nreturn [{ json: { lastTimestamp: lastTs } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [200, 0],
+      "id": "a1b2c3d4-0001-0001-0001-000000000001",
+      "name": "Get Last Timestamp"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.testmail.app/api/json?apikey=6d3a712a-6383-4888-97d1-091d024142e8&namespace=73cn1&timestamp_from={{ $json.lastTimestamp }}&livequery=true",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [420, 0],
+      "id": "ac7f439e-c548-4f0b-a034-08d2f05d2189",
+      "name": "Fetch New Emails"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Éclate le tableau emails[] en items individuels.\n// Si aucun email, retourne un tableau vide → le workflow s'arrête proprement.\nconst emails = $input.first().json.emails || [];\nif (!emails.length) return [];\nreturn emails.map(email => ({ json: email }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [640, 0],
+      "id": "a1b2c3d4-0002-0002-0002-000000000002",
+      "name": "Split Emails"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false, "typeValidation": "strict", "version": 3 },
+          "conditions": [
+            {
+              "id": "cond-attach",
+              "leftValue": "={{ $json.attachments && $json.attachments.length > 0 ? $json.attachments[0] : null }}",
+              "rightValue": "",
+              "operator": { "type": "object", "operation": "notEmpty", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [860, 0],
+      "id": "d54f5442-09f3-46a4-884c-21de31511de4",
+      "name": "Has Attachment?"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.attachments[0].downloadUrl }}",
+        "options": {
+          "response": { "response": { "responseFormat": "file" } }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [1080, 0],
+      "id": "f651070e-2e4f-4621-8012-6ea2d6fef375",
+      "name": "Download CV"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Transmet les métadonnées de l'email (expéditeur, sujet)\n// au nœud suivant en les greffant sur le binaire téléchargé.\nconst email = $input.all()[0];\nconst items = $input.all();\nreturn items.map(item => ({\n  json: {\n    from_email:  email.json.from_parsed?.[0]?.address || email.json.from || '',\n    from_name:   email.json.from_parsed?.[0]?.name    || '',\n    subject:     email.json.subject || '',\n    filename:    email.json.attachments?.[0]?.filename || 'cv.txt',\n    email_id:    email.json.id || '',\n    timestamp:   email.json.timestamp || Date.now(),\n  },\n  binary: item.binary,\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1300, 0],
+      "id": "a1b2c3d4-0003-0003-0003-000000000003",
+      "name": "Prepare Metadata"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/score",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [1520, 0],
+      "id": "0802722c-fc5a-4e0a-a156-bcc996b57573",
+      "name": "Score CV (ML)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fusionne la réponse ML avec les métadonnées email du nœud précédent.\n// Utilise $('Prepare Metadata') pour récupérer from_email, filename, etc.\nconst mlResult = $input.first().json;\nconst meta = $('Prepare Metadata').first().json;\nreturn [{ json: { ...meta, ...mlResult } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1740, 0],
+      "id": "a1b2c3d4-0004-0004-0004-000000000004",
+      "name": "Merge Result"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false, "typeValidation": "strict", "version": 3 },
+          "conditions": [
+            {
+              "id": "cond-invite",
+              "leftValue": "={{ $json.decision }}",
+              "rightValue": "invite",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [1960, -120],
+      "id": "a1b2c3d4-0005-0005-0005-000000000005",
+      "name": "Is Invite?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false, "typeValidation": "strict", "version": 3 },
+          "conditions": [
+            {
+              "id": "cond-reject",
+              "leftValue": "={{ $json.decision }}",
+              "rightValue": "reject",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [1960, 120],
+      "id": "a1b2c3d4-0006-0006-0006-000000000006",
+      "name": "Is Reject?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.testmail.app/api/send",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"apikey\": \"6d3a712a-6383-4888-97d1-091d024142e8\",\n  \"namespace\": \"73cn1\",\n  \"to\": \"{{ $json.from_email }}\",\n  \"from\": \"73cn1.rh@inbox.testmail.app\",\n  \"subject\": \"Votre candidature — Suite donnée ✅\",\n  \"text\": \"Bonjour {{ $json.from_name || $json.name || '' }},\\n\\nNous avons bien reçu votre CV et nous avons le plaisir de vous informer que votre profil a retenu notre attention.\\n\\nNous reviendrons vers vous très prochainement pour la suite du processus.\\n\\nCordialement,\\nL'équipe RH\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [2200, -120],
+      "id": "a1b2c3d4-0007-0007-0007-000000000007",
+      "name": "Email Invite"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.testmail.app/api/send",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"apikey\": \"6d3a712a-6383-4888-97d1-091d024142e8\",\n  \"namespace\": \"73cn1\",\n  \"to\": \"{{ $json.from_email }}\",\n  \"from\": \"73cn1.rh@inbox.testmail.app\",\n  \"subject\": \"Votre candidature — Réponse\",\n  \"text\": \"Bonjour {{ $json.from_name || $json.name || '' }},\\n\\nNous vous remercions pour l'intérêt que vous portez à notre entreprise et pour le temps consacré à votre candidature.\\n\\nAprès examen attentif de votre dossier, nous ne sommes pas en mesure de donner une suite favorable à votre candidature à ce stade.\\n\\nNous vous souhaitons bonne continuation dans vos recherches.\\n\\nCordialement,\\nL'équipe RH\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [2200, 120],
+      "id": "a1b2c3d4-0008-0008-0008-000000000008",
+      "name": "Email Reject"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Met à jour le dernier timestamp traité pour ne pas re-traiter ces emails.\n// Utilise le timestamp du dernier email traité dans ce batch.\nconst stored = $getWorkflowStaticData('global');\nconst ts = $input.first().json.timestamp || Date.now();\nif (!stored.lastTimestamp || ts > stored.lastTimestamp) {\n  stored.lastTimestamp = ts + 1; // +1ms pour exclure cet email des prochains runs\n}\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2200, 0],
+      "id": "a1b2c3d4-0009-0009-0009-000000000009",
+      "name": "Update Timestamp"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Cron": {
+      "main": [[{ "node": "Get Last Timestamp", "type": "main", "index": 0 }]]
+    },
+    "Get Last Timestamp": {
+      "main": [[{ "node": "Fetch New Emails", "type": "main", "index": 0 }]]
+    },
+    "Fetch New Emails": {
+      "main": [[{ "node": "Split Emails", "type": "main", "index": 0 }]]
+    },
+    "Split Emails": {
+      "main": [[{ "node": "Has Attachment?", "type": "main", "index": 0 }]]
+    },
+    "Has Attachment?": {
+      "main": [[{ "node": "Download CV", "type": "main", "index": 0 }]]
+    },
+    "Download CV": {
+      "main": [[{ "node": "Prepare Metadata", "type": "main", "index": 0 }]]
+    },
+    "Prepare Metadata": {
+      "main": [[{ "node": "Score CV (ML)", "type": "main", "index": 0 }]]
+    },
+    "Score CV (ML)": {
+      "main": [[{ "node": "Merge Result", "type": "main", "index": 0 }]]
+    },
+    "Merge Result": {
+      "main": [
+        [
+          { "node": "Is Invite?",       "type": "main", "index": 0 },
+          { "node": "Is Reject?",       "type": "main", "index": 0 },
+          { "node": "Update Timestamp", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Is Invite?": {
+      "main": [[{ "node": "Email Invite", "type": "main", "index": 0 }]]
+    },
+    "Is Reject?": {
+      "main": [[{ "node": "Email Reject", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1", "binaryMode": "separate" },
+  "versionId": "910a1ed7-c9d0-42b8-9334-868193c62cec",
+  "meta": {
+    "instanceId": "66184541f22fa72c380fd23bce8b5da44a10ffa14399314a484f25235e561c0b"
+  },
+  "id": "abEOu03Ie9ToL9Jn",
+  "tags": []
+}

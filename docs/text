@@ -1,0 +1,28 @@
+Test local — 3 commandes :
+
+  # 1. Copie le .env.example en .env (s'il n'existe pas déjà)
+  cp .env.example .env
+
+  # 2. Lance tout
+  docker-compose up --build
+
+  # 3. Ouvre dans le navigateur
+  # → N8N   : http://localhost:5678
+  # → API   : http://localhost:8000/docs
+  # → Page RH : ouvre api/rh_dashboard.html directement
+
+  Dans N8N : Settings → Import workflow → colle docs/Automatic CV.json → Active.
+
+  ---
+  Passage en prod sur DO — 1 seule différence dans .env :
+
+  # Décommenter dans .env :
+  N8N_HOST=n8n.lony.app
+  WEBHOOK_URL=https://n8n.lony.app/
+
+  Puis sur le serveur DO :
+  git pull
+  docker-compose up --build -d
+
+  Le nœud Score CV (ML) appelle http://api:8000/score — ce nom api fonctionne automatiquement dans Docker Compose que ce soit en local ou sur DO, les deux containers
+  sont sur le même réseau interne.

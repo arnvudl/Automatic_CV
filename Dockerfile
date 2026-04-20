@@ -10,6 +10,8 @@ RUN pip install --no-cache-dir -r req_api.txt -r req_ml.txt
 # Copie des dossiers vitaux
 COPY api/ ./api/
 COPY pipeline_ml/ ./pipeline_ml/
+# models/ est monté en volume — pas copié dans l'image
+# (permet de mettre à jour les modèles sans rebuild)
 
 EXPOSE 8000
 ENV PYTHONPATH=/app

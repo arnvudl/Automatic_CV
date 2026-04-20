@@ -17,7 +17,7 @@ from typing import Optional
 ROOT = Path(__file__).parent.parent.parent
 RAW_FOLDER = ROOT / "data" / "raw"
 PROCESSED_FOLDER = ROOT / "data" / "processed"
-LABELS_FILE = Path(__file__).parent.parent / "config" / "student_labels.csv"
+LABELS_FILE = ROOT / "data" / "raw" / "labels.csv"
 
 TODAY = datetime.today()
 MAX_WORKERS = min(8, (os.cpu_count() or 1) * 2)
