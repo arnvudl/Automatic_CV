@@ -63,7 +63,7 @@ y_pred = np.where(is_junior, (y_proba >= threshold_junior).astype(int), (y_proba
 plt.figure(figsize=(8, 6))
 cm = confusion_matrix(y_true, y_pred)
 sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=['Rejeté', 'Invité'], yticklabels=['Rejeté', 'Invité'])
-plt.title(f"Matrice de Confusion (v6 - Dataset Réel)")
+plt.title(f"Matrice de Confusion (v3 - Dataset Réel)")
 plt.ylabel('Réel')
 plt.xlabel('Prédit')
 plt.savefig(REPORTS_DIR / "confusion_matrix.png")
