@@ -1,0 +1,49 @@
+RAPPORT FAIRNESS V2 — Corrections d'Équité
+============================================================
+Dataset test : 100 CV  |  Positifs : 20  |  Taux : 20.0%
+
+── BASELINE (v5 — seuils fixes) ──────────────────────────────
+Par genre :
+  Female                 n= 51  Recall=0.500  Precision=0.333  F1=0.400
+  Male                   n= 49  Recall=0.800  Precision=0.444  F1=0.571
+Par âge :
+  Junior (<30)           n= 34  Recall=0.400  Precision=0.286  F1=0.333
+  Adulte (30+)           n= 66  Recall=0.733  Precision=0.423  F1=0.537
+  AUC global : 0.755
+
+── ÉTAPE 1 : Reweighting Genre ────────────────────────────────
+  Seuil adultes recalibré : 0.618
+  Seuil juniors recalibré : 0.376
+Par genre :
+  Female                 n= 51  Recall=0.500  Precision=0.333  F1=0.400
+  Male                   n= 49  Recall=0.900  Precision=0.474  F1=0.621
+Par âge :
+  Junior (<30)           n= 34  Recall=0.400  Precision=0.286  F1=0.333
+  Adulte (30+)           n= 66  Recall=0.800  Precision=0.444  F1=0.571
+  AUC global : 0.755
+
+── ÉTAPE 2 : Seuils Différenciés Genre × Âge (Equalized Recall) ──
+  Seuil Male   × adult  : 0.618
+  Seuil Male   × junior : 0.558
+  Seuil Female × adult  : 0.396
+  Seuil Female × junior : 0.275
+Par genre :
+  Female                 n= 51  Recall=0.800  Precision=0.250  F1=0.381
+  Male                   n= 49  Recall=0.800  Precision=0.500  F1=0.615
+Par âge :
+  Junior (<30)           n= 34  Recall=0.400  Precision=0.286  F1=0.333
+  Adulte (30+)           n= 66  Recall=0.933  Precision=0.341  F1=0.500
+  AUC global : 0.755
+
+── ÉTAPE 3 : Amélioration Précision Juniors (recall_target=0.55) ──
+  Seuil adultes : 0.618  |  Seuil juniors : 0.376
+Par âge :
+  Junior (<30)           n= 34  Recall=0.400  Precision=0.286  F1=0.333
+  Adulte (30+)           n= 66  Recall=0.800  Precision=0.444  F1=0.571
+
+── RÉSUMÉ COMPARATIF ─────────────────────────────────────────
+Modèle                                     Female R   Male R     Jr R     Jr P
+  Baseline v5                                 0.500    0.800    0.400    0.286
+  + Reweighting (étape 1)                     0.500    0.900    0.400    0.286
+  + Seuils genre×âge (étape 2)                0.800    0.800    0.400    0.286
+  + Junior précision (étape 3)                0.500    0.900    0.400    0.286
