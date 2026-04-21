@@ -1,15 +1,25 @@
 """
 p01_parse.py - CV Parsing
+Deux modes :
+  - parse_cv()     : regex sur CVs structurés (batch entraînement)
+  - parse_cv_llm() : LLM Groq sur texte brut quelconque (inférence live)
 """
 
 import os
 import re
 import csv
+import json
 import uuid
 from datetime import datetime
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).parent.parent.parent / ".env")
+except ImportError:
+    pass
 
 # ==============================================================
 # CONFIG
@@ -254,7 +264,238 @@ def parse_cv(filepath: Path, labels_dict: dict) -> tuple:
 
     return identity_row, feature_row
 
+_LLM_PROMPT = """\
+Tu es un expert en extraction de données RH. Analyse ce CV (texte brut, peu importe sa mise en forme)
+et retourne UNIQUEMENT un JSON valide avec la structure suivante. Ne mets aucun texte autour.
+
+{
+  "name": "Prénom Nom ou null",
+  "gender": "Male|Female|null",
+  "dob": "YYYY-MM-DD ou null",
+  "email": "email ou null",
+  "phone": "+XXX... ou null",
+  "target_role": "Titre du poste visé ou déduit du profil, ou null",
+  "education": [
+    {"diploma": "Bachelor|Master|PhD|Bac ou équivalent", "field": "domaine d'études", "institution": "nom", "year": 2020}
+  ],
+  "jobs": [
+    {"title": "Intitulé du poste", "company": "Entreprise", "start": "YYYY-MM", "end": "YYYY-MM ou present"}
+  ],
+  "skills": {
+    "technical": ["Python", "SQL", ...],
+    "methods": ["Agile", "Scrum", ...],
+    "management": ["Budget", "Team leadership", ...]
+  },
+  "languages": [
+    {"name": "English", "level": "C1"}
+  ],
+  "certifications": ["AWS Certified", "PMP", ...]
+}
+
+Règles :
+- Si une info est absente, mets null ou liste vide []
+- Pour education, garde seulement le diplôme le plus élevé si tu dois choisir
+- Pour les dates de jobs, estime si tu vois seulement l'année (ex: "2020" → "2020-01")
+- Le niveau de langue doit être A1/A2/B1/B2/C1/C2 ou Native/Fluent si non précisé
+- target_role : déduis-le du titre le plus récent ou de l'objectif affiché
+
+CV :
+\"\"\"
+{cv_text}
+\"\"\"
+"""
+
+
+def parse_cv_llm(text: str, labels_dict: dict = None, filename: str = "") -> tuple:
+    """
+    Parse un CV en texte brut via LLM Groq.
+    Accepte n'importe quel format (PDF, Word, Canva, colonnes multiples).
+    Retourne (identity_row, feature_row) identique à parse_cv().
+    Lève RuntimeError si Groq non disponible.
+    """
+    try:
+        from groq import Groq
+    except ImportError:
+        raise RuntimeError("groq non installé — pip install groq")
+
+    api_key = os.getenv("GROQ_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("GROQ_API_KEY non défini dans l'environnement")
+
+    client = Groq(api_key=api_key)
+
+    prompt = _LLM_PROMPT.replace("{cv_text}", text[:12000])
+
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        max_tokens=1024,
+        temperature=0.0,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    raw = response.choices[0].message.content.strip()
+
+    # Extraire le JSON même si le LLM ajoute du texte autour
+    match = re.search(r'\{.*\}', raw, re.DOTALL)
+    if not match:
+        raise ValueError(f"Réponse LLM non parseable : {raw[:200]}")
+    data = json.loads(match.group())
+
+    # ── Identity ────────────────────────────────────────────────────
+    name   = data.get("name")
+    gender = data.get("gender")
+    dob    = data.get("dob")
+    email  = data.get("email")
+    phone  = data.get("phone")
+    age    = _calculate_age(dob) if dob else None
+
+    stem   = Path(filename).stem if filename else str(uuid.uuid4())
+    cv_id  = str(uuid.uuid5(uuid.NAMESPACE_DNS, stem or str(uuid.uuid4())))
+
+    # ── Label (même logique que parse_cv) ──────────────────────────
+    label_val = None
+    fn_lower  = stem.lower()
+    if "invite" in fn_lower:
+        label_val = 1
+    elif "reject" in fn_lower:
+        label_val = 0
+    if label_val is None and labels_dict and stem in (labels_dict or {}):
+        raw_l = str(labels_dict[stem]).lower()
+        if "invite" in raw_l or raw_l == "1":
+            label_val = 1
+        elif "reject" in raw_l or raw_l == "0":
+            label_val = 0
+
+    # ── Target role & sector ────────────────────────────────────────
+    target_role = data.get("target_role")
+    sector      = _get_sector(target_role)
+
+    # ── Education ───────────────────────────────────────────────────
+    edu_list = data.get("education") or []
+    education_level = 1
+    education_field = None
+    if edu_list:
+        best = edu_list[0]  # LLM instructions : meilleur diplôme en premier
+        education_level = _get_education_level(best.get("diploma", ""))
+        education_field = best.get("field")
+
+    # ── Experience ──────────────────────────────────────────────────
+    jobs = data.get("jobs") or []
+    nb_jobs = len(jobs)
+    years_experience = 0.0
+    parsed_jobs = []
+    for j in jobs:
+        start_d = _parse_date(str(j.get("start") or ""))
+        end_d   = _parse_date(str(j.get("end")   or "present"))
+        if start_d and end_d and end_d > start_d:
+            years_experience += (end_d - start_d).days / 365.25
+        parsed_jobs.append({"title": j.get("title", ""), "company": j.get("company", "")})
+
+    years_experience = round(years_experience, 1)
+    avg_job_duration = round(years_experience / nb_jobs, 1) if nb_jobs > 0 else 0.0
+
+    career_progression = 0
+    if nb_jobs >= 2:
+        first_job, last_job = parsed_jobs[-1], parsed_jobs[0]
+        if (len({j["company"] for j in parsed_jobs}) > 1
+                and _is_senior(last_job["title"])
+                and not _is_senior(first_job["title"])):
+            career_progression = 1
+
+    # ── Skills ──────────────────────────────────────────────────────
+    skills = data.get("skills") or {}
+    nb_tech = len(skills.get("technical") or [])
+    nb_meth = len(skills.get("methods")   or [])
+    nb_man  = len(skills.get("management") or [])
+
+    # ── Languages ───────────────────────────────────────────────────
+    langs = data.get("languages") or []
+    nb_languages = len(langs)
+    has_english = has_french = has_german = has_luxembourgish = 0
+    english_level = 0
+    for lang in langs:
+        name_l = str(lang.get("name") or "").lower()
+        lvl    = str(lang.get("level") or "").lower()
+        if any(k in name_l for k in ("english", "anglais")):
+            has_english = 1
+            # Convertir Native/Fluent → C2/C1, sinon chercher A1-C2
+            if lvl in ("native", "natif"):
+                english_level = 6
+            elif lvl in ("fluent", "courant"):
+                english_level = 5
+            else:
+                english_level = LEVEL_MAP.get(lvl[:2], 0)
+        if any(k in name_l for k in ("french", "français", "francais")):
+            has_french = 1
+        if any(k in name_l for k in ("german", "deutsch", "allemand")):
+            has_german = 1
+        if any(k in name_l for k in ("luxembourgish", "luxembourgeois")):
+            has_luxembourgish = 1
+
+    # ── Certifications ──────────────────────────────────────────────
+    nb_certifications = len(data.get("certifications") or [])
+
+    # ── Profile type ────────────────────────────────────────────────
+    if years_experience < 3:
+        profile_type = "junior"
+    elif years_experience < 8:
+        profile_type = "intermediate"
+    else:
+        profile_type = "senior"
+
+    identity_row = {
+        "cv_id":           cv_id,
+        "source_filename": stem,
+        "name":            name,
+        "email":           email,
+        "phone":           phone,
+        "gender":          gender,
+        "age":             age,
+    }
+
+    feature_row = {
+        "cv_id":                cv_id,
+        "profile_type":         profile_type,
+        "target_role":          target_role,
+        "sector":               sector,
+        "education_level":      education_level,
+        "education_field":      education_field,
+        "nb_jobs":              nb_jobs,
+        "years_experience":     years_experience,
+        "avg_job_duration":     avg_job_duration,
+        "career_progression":   career_progression,
+        "nb_technical_skills":  nb_tech,
+        "nb_methods_skills":    nb_meth,
+        "nb_management_skills": nb_man,
+        "total_skills":         nb_tech + nb_meth + nb_man,
+        "nb_languages":         nb_languages,
+        "has_english":          has_english,
+        "english_level":        english_level,
+        "has_french":           has_french,
+        "has_german":           has_german,
+        "has_luxembourgish":    has_luxembourgish,
+        "nb_certifications":    nb_certifications,
+        "label":                label_val,
+    }
+
+    return identity_row, feature_row
+
+
 def main():
+    import argparse
+    parser_arg = argparse.ArgumentParser(description="p01 — Parsing des CVs")
+    parser_arg.add_argument(
+        "--parser", choices=["regex", "llm"], default="regex",
+        help="regex (défaut, rapide, CVs structurés) | llm (Groq, universel, ~15 min sur 500 CVs)"
+    )
+    args = parser_arg.parse_args()
+    use_llm = args.parser == "llm"
+
+    if use_llm:
+        print("Mode LLM activé — parsing via Groq (llama-3.3-70b-versatile)")
+        print("Attention : ~500 appels API, ~15-20 min sur le free tier Groq.\n")
+    else:
+        print("Mode Regex activé — parsing structuré rapide.\n")
+
     if not RAW_FOLDER.exists():
         print(f"Dossier introuvable : {RAW_FOLDER}")
         return
@@ -278,17 +519,38 @@ def main():
     features   = []
     errors = 0
 
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-        futures = {pool.submit(parse_cv, f, labels_dict): f for f in cv_files}
-        for future in as_completed(futures):
-            filepath = futures[future]
+    if use_llm:
+        # LLM : séquentiel pour respecter le rate limit Groq
+        for i, filepath in enumerate(cv_files, 1):
             try:
-                id_row, feat_row = future.result()
+                text = filepath.read_text(encoding="utf-8", errors="ignore")
+                id_row, feat_row = parse_cv_llm(text, labels_dict, filename=filepath.name)
                 identities.append(id_row)
                 features.append(feat_row)
+                print(f"  [{i}/{len(cv_files)}] {filepath.name} → {id_row.get('name', '?')}")
             except Exception as exc:
                 errors += 1
                 print(f"  [ERREUR] {filepath.name} : {exc}")
+                # Fallback regex sur erreur LLM individuelle
+                try:
+                    id_row, feat_row = parse_cv(filepath, labels_dict)
+                    identities.append(id_row)
+                    features.append(feat_row)
+                    print(f"    ↳ Fallback regex OK")
+                except Exception as exc2:
+                    print(f"    ↳ Fallback regex aussi échoué : {exc2}")
+    else:
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+            futures = {pool.submit(parse_cv, f, labels_dict): f for f in cv_files}
+            for future in as_completed(futures):
+                filepath = futures[future]
+                try:
+                    id_row, feat_row = future.result()
+                    identities.append(id_row)
+                    features.append(feat_row)
+                except Exception as exc:
+                    errors += 1
+                    print(f"  [ERREUR] {filepath.name} : {exc}")
 
     feat_headers = [
         'cv_id', 'profile_type', 'target_role', 'sector',

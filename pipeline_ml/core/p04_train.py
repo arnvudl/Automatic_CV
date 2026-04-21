@@ -4,6 +4,7 @@ Changements vs v3 :
   - education_level (SHAP dominant 0.529, biais académique) remplacé par
     education_adj (compressed scale : Bachelor=0.30, Master=0.70)
   - potential_per_year ajouté (GCA proxy — vitesse d'apprentissage junior)
+  - Grid Search CV ajouté : optimise C, penalty, solver sur AUC-ROC (5-fold stratifié)
 Seuils   : adultes (F1-optimal) et juniors (recall >= 0.55) calculés sur train
 Sorties  : model.pkl, scaler.pkl, feature_cols.pkl, threshold.pkl,
            threshold_junior.pkl, reports/evaluation.txt
@@ -15,10 +16,20 @@ import pandas as pd
 from pathlib import Path
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKFold
 from sklearn.metrics import (
     classification_report, roc_auc_score, precision_recall_curve
 )
+
+# Grille d'hyperparamètres explorée
+# sklearn 1.8+ : penalty déprécié → on utilise l1_ratio avec solver=saga
+#   l1_ratio=0 → L2 (Ridge)  |  l1_ratio=1 → L1 (Lasso)  |  0<r<1 → ElasticNet
+PARAM_GRID = {
+    "C":            [0.01, 0.05, 0.1, 0.5, 1.0, 5.0],
+    "l1_ratio":     [0.0, 0.5, 1.0],   # 0=L2, 0.5=ElasticNet, 1=L1
+    "solver":       ["saga"],
+    "class_weight": ["balanced"],
+}
 
 ROOT            = Path(__file__).parent.parent.parent
 FEATURES_PATH   = ROOT / "data" / "processed" / "features.csv"
@@ -89,9 +100,26 @@ def main():
     X_tr = scaler.fit_transform(X_train)
     X_te = scaler.transform(X_test)
 
-    model = LogisticRegression(C=0.1, max_iter=1000, random_state=RANDOM_STATE,
-                                class_weight="balanced")
-    model.fit(X_tr, y_train)
+    # ── Grid Search — optimisation sur AUC-ROC, 5-fold stratifié ──
+    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
+    base_model = LogisticRegression(max_iter=1000, random_state=RANDOM_STATE)
+    grid = GridSearchCV(
+        base_model,
+        PARAM_GRID,
+        scoring="roc_auc",
+        cv=cv,
+        n_jobs=-1,
+        verbose=0,
+        refit=True,
+    )
+    grid.fit(X_tr, y_train)
+
+    model = grid.best_estimator_
+    best_params = grid.best_params_
+    best_cv_auc = grid.best_score_
+
+    print(f"Grid Search — meilleurs params : {best_params}")
+    print(f"Grid Search — AUC-ROC CV (5-fold) : {best_cv_auc:.3f}")
 
     y_proba_tr = model.predict_proba(X_tr)[:, 1]
     y_proba_te = model.predict_proba(X_te)[:, 1]
@@ -115,10 +143,12 @@ def main():
 
     with open(REPORTS_DIR / "evaluation.txt", "w", encoding="utf-8") as f:
         f.write("Modele : Logistic Regression (v4-RRK-GCA)\n")
+        f.write(f"Meilleurs hyperparametres : {best_params}\n")
+        f.write(f"AUC-ROC CV (5-fold)       : {best_cv_auc:.3f}\n")
         f.write(f"Seuil adultes (30+) : {thr_adult:.3f}\n")
         f.write(f"Seuil juniors (<30) : {thr_junior:.3f}\n")
         f.write(f"Features : {V3_FEATURES}\n")
-        f.write(f"AUC-ROC  : {auc:.3f}\n\n")
+        f.write(f"AUC-ROC test : {auc:.3f}\n\n")
         f.write(report)
 
     joblib.dump(model,       MODELS_DIR / "model.pkl")

@@ -29,16 +29,18 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 try:
-    import anthropic as _anthropic
-    _anthropic_client = _anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
+    from groq import Groq as _Groq
+    _groq_client = _Groq(api_key=os.getenv("GROQ_API_KEY", ""))
 except Exception:
-    _anthropic_client = None
+    _groq_client = None
+
+GROQ_MODEL = "llama-3.3-70b-versatile"
 
 # ── Imports pipeline ────────────────────────────────────────────
 import sys
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
-from pipeline_ml.core.p01_parse import parse_cv
+from pipeline_ml.core.p01_parse import parse_cv, parse_cv_llm
 
 # ── Config ───────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO)
@@ -253,13 +255,18 @@ async def score_cv(file: UploadFile = File(...)):
     except UnicodeDecodeError:
         text = content.decode("latin-1")
 
-    # Sauvegarde temporaire pour parse_cv (qui lit un fichier)
-    tmp = PROCESSED_DIR / f"_tmp_{uuid.uuid4().hex}.txt"
+    # Parsing : LLM Groq en priorité, fallback regex si Groq indisponible
     try:
-        tmp.write_text(text, encoding="utf-8")
-        id_row, feat_row = parse_cv(tmp, {})
-    finally:
-        tmp.unlink(missing_ok=True)
+        id_row, feat_row = parse_cv_llm(text, filename=file.filename or "")
+        logger.info(f"Parsing LLM OK — {id_row.get('name')}")
+    except Exception as llm_err:
+        logger.warning(f"Parsing LLM échoué ({llm_err}), fallback regex")
+        tmp = PROCESSED_DIR / f"_tmp_{uuid.uuid4().hex}.txt"
+        try:
+            tmp.write_text(text, encoding="utf-8")
+            id_row, feat_row = parse_cv(tmp, {})
+        finally:
+            tmp.unlink(missing_ok=True)
 
     age = id_row.get("age")
     feat_row = _enrich_features(feat_row, age)
@@ -707,8 +714,8 @@ def semantic_analysis(candidate_id: str):
     Retourne : équivalences compétences, trajectoire, gaps, score sémantique, signaux faibles.
     Nécessite ANTHROPIC_API_KEY dans l'environnement.
     """
-    if _anthropic_client is None:
-        raise HTTPException(503, "Client Anthropic non initialisé. Vérifiez ANTHROPIC_API_KEY.")
+    if _groq_client is None:
+        raise HTTPException(503, "Client Groq non initialisé. Vérifiez GROQ_API_KEY.")
 
     raw_file = RAW_TEXTS_DIR / f"{candidate_id}.txt"
     if not raw_file.exists():
@@ -757,13 +764,14 @@ Réponds UNIQUEMENT en JSON valide avec cette structure exacte :
 Sois factuel, bienveillant, et cherche les compétences transversales et le potentiel caché. Limite skill_equivalencies à 5 max, hidden_gems à 3 max, red_flags à 2 max."""
 
     try:
-        message = _anthropic_client.messages.create(
-            model="claude-opus-4-5",
+        completion = _groq_client.chat.completions.create(
+            model=GROQ_MODEL,
             max_tokens=1024,
+            temperature=0.3,
             messages=[{"role": "user", "content": prompt}],
         )
-        raw_response = message.content[0].text.strip()
-        # Extraire le JSON (Claude peut ajouter du texte autour)
+        raw_response = completion.choices[0].message.content.strip()
+        # Extraire le JSON (le LLM peut ajouter du texte autour)
         import re
         json_match = re.search(r'\{.*\}', raw_response, re.DOTALL)
         if json_match:
@@ -773,11 +781,11 @@ Sois factuel, bienveillant, et cherche les compétences transversales et le pote
     except json.JSONDecodeError as e:
         raise HTTPException(500, f"Réponse LLM non parseable : {e}")
     except Exception as e:
-        raise HTTPException(500, f"Erreur Anthropic API : {e}")
+        raise HTTPException(500, f"Erreur Groq API : {e}")
 
     return {
         "candidate_id": candidate_id,
-        "model": "claude-opus-4-5",
+        "model": GROQ_MODEL,
         **result,
     }
 

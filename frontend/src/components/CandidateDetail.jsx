@@ -397,7 +397,7 @@ export default function CandidateDetail({ candidate: c, onClose, onAction }) {
                     </Section>
                   )}
 
-                  <p className="text-xs text-slate-300 text-center">Analyse par {semantic.model}</p>
+                  <p className="text-xs text-slate-300 text-center">Analyse par Groq / {semantic.model}</p>
                 </>
               )}
             </div>

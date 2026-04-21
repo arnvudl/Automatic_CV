@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Candidate Profile | Luminary ATS</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-highest": "#e1e2eb",
+                        "on-primary-container": "#fefcff",
+                        "tertiary": "#006b2b",
+                        "error-container": "#ffdad6",
+                        "on-tertiary-fixed": "#002108",
+                        "error": "#ba1a1a",
+                        "surface-tint": "#005ac1",
+                        "surface-container-high": "#e7e7f1",
+                        "primary-fixed-dim": "#adc6ff",
+                        "surface-dim": "#d8d9e3",
+                        "surface-container": "#ecedf7",
+                        "surface-variant": "#e1e2eb",
+                        "on-secondary-container": "#415680",
+                        "background": "#f9f9ff",
+                        "on-surface-variant": "#424753",
+                        "inverse-surface": "#2e3038",
+                        "secondary-container": "#b7ccfd",
+                        "on-secondary-fixed-variant": "#31466f",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary-fixed-variant": "#005320",
+                        "primary": "#0058bd",
+                        "tertiary-fixed-dim": "#6ddd81",
+                        "on-primary": "#ffffff",
+                        "primary-container": "#2771df",
+                        "outline-variant": "#c2c6d5",
+                        "secondary": "#495e89",
+                        "on-tertiary": "#ffffff",
+                        "outline": "#727785",
+                        "tertiary-container": "#008738",
+                        "secondary-fixed-dim": "#b1c6f7",
+                        "inverse-primary": "#adc6ff",
+                        "on-error-container": "#93000a",
+                        "on-secondary-fixed": "#001a41",
+                        "on-surface": "#191b22",
+                        "on-background": "#191b22",
+                        "secondary-fixed": "#d8e2ff",
+                        "on-error": "#ffffff",
+                        "surface-bright": "#f9f9ff",
+                        "on-primary-fixed-variant": "#004494",
+                        "on-tertiary-container": "#f7fff2",
+                        "primary-fixed": "#d8e2ff",
+                        "tertiary-fixed": "#89fa9b",
+                        "surface-container-low": "#f2f3fd",
+                        "on-secondary": "#ffffff",
+                        "on-primary-fixed": "#001a41",
+                        "inverse-on-surface": "#eff0fa",
+                        "surface": "#f9f9ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #f9f9ff;
+            color: #191b22;
+        }
+        .ai-glow {
+            box-shadow: 0 0 40px -10px rgba(0, 107, 43, 0.2);
+        }
+    </style>
+</head>
+<body class="font-body selection:bg-primary-container selection:text-on-primary-container">
+<!-- SideNavBar Shell -->
+<nav class="h-screen w-64 fixed left-0 top-0 z-50 bg-[#f2f3fd] dark:bg-slate-900 flex flex-col h-full p-6 space-y-8 font-['Inter'] font-medium text-sm">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+</div>
+<div>
+<h1 class="text-lg font-black text-[#0058bd]">Luminary ATS</h1>
+<p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Recruitment Suite</p>
+</div>
+</div>
+<div class="flex-1 space-y-2">
+<a class="flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:text-[#0058bd] hover:bg-white/50 dark:hover:bg-slate-800/50 transition-all" href="#">
+<span class="material-symbols-outlined">dashboard</span> Dashboard
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:text-[#0058bd] hover:bg-white/50 dark:hover:bg-slate-800/50 transition-all" href="#">
+<span class="material-symbols-outlined">work_outline</span> Jobs
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 bg-white dark:bg-slate-800 text-[#0058bd] dark:text-blue-300 shadow-sm rounded-xl translate-x-1 duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">group</span> Candidates
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:text-[#0058bd] hover:bg-white/50 dark:hover:bg-slate-800/50 transition-all" href="#">
+<span class="material-symbols-outlined">calendar_today</span> Interviews
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:text-[#0058bd] hover:bg-white/50 dark:hover:bg-slate-800/50 transition-all" href="#">
+<span class="material-symbols-outlined">settings</span> Settings
+            </a>
+</div>
+<div class="pt-6 space-y-2 border-t border-slate-200 dark:border-slate-800">
+<a class="flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:text-[#0058bd] transition-all" href="#">
+<span class="material-symbols-outlined">help</span> Help Center
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:text-[#0058bd] transition-all" href="#">
+<span class="material-symbols-outlined">logout</span> Logout
+            </a>
+</div>
+</nav>
+<main class="ml-64 min-h-screen">
+<!-- TopNavBar Shell -->
+<header class="docked full-width top-0 sticky z-40 bg-[#f9f9ff]/80 dark:bg-slate-950/80 backdrop-blur-xl no-border shadow-none bg-surface-container-low flex justify-between items-center w-full px-8 py-3">
+<div class="flex items-center gap-6">
+<nav class="flex items-center gap-6 font-['Inter'] text-sm font-medium">
+<a class="text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors px-2 py-1 rounded" href="#">Overview</a>
+<a class="text-[#0058bd] font-bold border-b-2 border-[#0058bd] px-2 py-1" href="#">Candidate Profile</a>
+<a class="text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors px-2 py-1 rounded" href="#">Scorecard</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<div class="flex items-center gap-3 pl-4 border-l border-slate-200">
+<div class="text-right">
+<p class="text-xs font-bold text-on-surface">Alex Rivera</p>
+<p class="text-[10px] text-slate-500">HR Manager</p>
+</div>
+<img alt="HR Manager Profile" class="w-10 h-10 rounded-full object-cover" data-alt="professional headshot of a smiling man in a blazer with blurred office background and soft natural light" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCfhq5sCcKEwny1O_e_EmLEJJFkQwtP3e4Ij2QMfM966eHdWnVwM4wRIlcJ1WAQnboGW1DV4_gPcbMHHKWTVpWVGUugzfa7jaTzw9c27osq-XPunYwD85yKC61muP_9uw4q23QLRWMRuF68WM75CSwBN4_R4dFpninBptDu_EJnBgcYbNGWSBzV7bC3eGKe5mOhBe0ph1X82BhhXkFYezaPd8xT-m57GkVidQbovihBFFtpJ8GPPRv1fFhTGmQ0EcTf-RjJZt-0paM"/>
+</div>
+</div>
+</header>
+<div class="p-10 max-w-7xl mx-auto">
+<!-- Breadcrumbs & Quick Actions -->
+<div class="flex justify-between items-center mb-10">
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-sm">arrow_back</span>
+<span class="text-sm font-medium">Back to Senior Frontend Developer Candidates</span>
+</div>
+<div class="flex gap-4">
+<button class="px-6 py-2.5 rounded-full bg-secondary-container text-on-secondary-container font-semibold text-sm hover:opacity-90 transition-all">
+                        Archive
+                    </button>
+<button class="px-8 py-2.5 rounded-full bg-gradient-to-r from-primary to-primary-container text-on-primary font-bold text-sm shadow-lg shadow-primary/20 scale-100 active:scale-95 transition-transform">
+                        Move to Interview
+                    </button>
+</div>
+</div>
+<!-- Page Layout -->
+<div class="grid grid-cols-12 gap-8">
+<!-- Left Column: Profile Summary -->
+<div class="col-span-4 space-y-8">
+<section class="bg-surface-container-lowest rounded-xl p-8 text-center">
+<img alt="Candidate Portrait" class="w-32 h-32 rounded-full mx-auto mb-6 object-cover ring-4 ring-surface-container-low" data-alt="Modern professional portrait of a woman with a confident expression wearing a minimal charcoal sweater" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCqO3uv96yJ87HxyWMcwKGhSl5bZV5VNI73O4eONYZdo9q6hfYDIztKGElXqeBe9gkhEOjn40tjZYSOebE_VDyVxj87L_8q8uGkgxAffEsyF-wrZ-VVrePIDilfoB1tHSJHEHAXdLg5IvI0RbrPle-HnTcdiCWxjDLPX6ecZ4KWyY3IC0kMKbpwwv_rCV03qsHg0ZxKKQ8wxn8Ai7RF89BHcugICjYZcGtPXkojB10Lq5pXK7dG8-wjFrMm9Ce0PQ1iGZWDHq2kM0k"/>
+<h2 class="text-2xl font-extrabold tracking-tight text-on-surface">Elena Rodriguez</h2>
+<p class="text-primary font-medium mb-6">Senior Frontend Engineer</p>
+<div class="flex justify-center gap-3 mb-8">
+<span class="px-3 py-1 bg-surface-container rounded-full text-xs font-bold text-on-surface-variant">San Francisco, CA</span>
+<span class="px-3 py-1 bg-surface-container rounded-full text-xs font-bold text-on-surface-variant">Remote Friendly</span>
+</div>
+<div class="space-y-4 text-left">
+<div class="flex items-center gap-3 p-3 rounded-lg hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-primary">mail</span>
+<span class="text-sm text-on-surface">elena.rod@example.com</span>
+</div>
+<div class="flex items-center gap-3 p-3 rounded-lg hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-primary">phone</span>
+<span class="text-sm text-on-surface">+1 (555) 012-3456</span>
+</div>
+<div class="flex items-center gap-3 p-3 rounded-lg hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-primary">link</span>
+<a class="text-sm text-primary font-bold hover:underline" href="#">LinkedIn Profile</a>
+</div>
+</div>
+<button class="w-full mt-8 flex items-center justify-center gap-2 p-4 bg-surface-container-high rounded-xl text-on-surface font-bold text-sm hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined">description</span>
+                            View Original Resume
+                        </button>
+</section>
+<!-- Skills Chip Cloud -->
+<section class="bg-surface-container-low rounded-xl p-6">
+<h3 class="text-sm font-black text-on-surface uppercase tracking-widest mb-4">Core Competencies</h3>
+<div class="flex flex-wrap gap-2">
+<span class="px-3 py-1 bg-white text-primary text-xs font-bold rounded-lg border border-primary/10">React v18</span>
+<span class="px-3 py-1 bg-white text-primary text-xs font-bold rounded-lg border border-primary/10">TypeScript</span>
+<span class="px-3 py-1 bg-white text-primary text-xs font-bold rounded-lg border border-primary/10">Next.js</span>
+<span class="px-3 py-1 bg-white text-primary text-xs font-bold rounded-lg border border-primary/10">Tailwind CSS</span>
+<span class="px-3 py-1 bg-white text-primary text-xs font-bold rounded-lg border border-primary/10">Redux Toolkit</span>
+<span class="px-3 py-1 bg-white text-primary text-xs font-bold rounded-lg border border-primary/10">Node.js</span>
+<span class="px-3 py-1 bg-white text-primary text-xs font-bold rounded-lg border border-primary/10">AWS</span>
+</div>
+</section>
+</div>
+<!-- Main Area -->
+<div class="col-span-8 space-y-8">
+<!-- AI Insight Section -->
+<section class="bg-surface-container-lowest rounded-xl p-8 ai-glow relative overflow-hidden">
+<div class="absolute top-0 right-0 p-6">
+<div class="flex items-center gap-2 bg-tertiary-container/10 px-4 py-2 rounded-full">
+<span class="w-2 h-2 bg-tertiary rounded-full animate-pulse"></span>
+<span class="text-tertiary font-black text-xs uppercase tracking-tighter">98 Match Score</span>
+</div>
+</div>
+<div class="flex items-center gap-3 mb-8">
+<span class="material-symbols-outlined text-tertiary text-3xl" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+<h3 class="text-xl font-extrabold text-on-surface">AI Insights &amp; Suitability</h3>
+</div>
+<div class="grid grid-cols-2 gap-6">
+<div class="p-5 bg-surface-container-low rounded-2xl">
+<p class="text-xs font-bold text-tertiary uppercase mb-2">Key Strength</p>
+<p class="text-sm text-on-surface font-medium leading-relaxed">Elena possesses deep expertise in React ecosystem. Her recent projects align perfectly with our current migration to Next.js 14.</p>
+</div>
+<div class="p-5 bg-surface-container-low rounded-2xl">
+<p class="text-xs font-bold text-tertiary uppercase mb-2">Pedigree</p>
+<p class="text-sm text-on-surface font-medium leading-relaxed">Significant tenure at high-growth organizations (Google, Stripe) indicates strong engineering discipline and scale experience.</p>
+</div>
+<div class="p-5 bg-surface-container-low rounded-2xl col-span-2">
+<p class="text-xs font-bold text-tertiary uppercase mb-2">Technical Verdict</p>
+<p class="text-sm text-on-surface font-medium leading-relaxed">Candidate demonstrates "Product-Minded" engineering. Analysis of her GitHub contributions shows a heavy focus on accessibility (a11y) and performance optimization, which are critical for our Q4 roadmap.</p>
+</div>
+</div>
+</section>
+<!-- Work History Timeline -->
+<section class="bg-surface-container-lowest rounded-xl p-8">
+<h3 class="text-xl font-extrabold text-on-surface mb-8">Work History</h3>
+<div class="space-y-12 relative before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[2px] before:bg-surface-container">
+<!-- Timeline Item 1 -->
+<div class="relative pl-12">
+<div class="absolute left-0 top-1 w-6 h-6 rounded-full bg-primary flex items-center justify-center ring-4 ring-white">
+<span class="w-2 h-2 bg-white rounded-full"></span>
+</div>
+<div class="flex justify-between items-start mb-2">
+<div>
+<h4 class="text-lg font-bold text-on-surface">Senior Software Engineer</h4>
+<p class="text-sm font-medium text-primary">Stripe • 2021 — Present</p>
+</div>
+<span class="text-[10px] font-black text-slate-400 uppercase">3 years 2 months</span>
+</div>
+<p class="text-sm text-on-surface-variant leading-relaxed">Leading the frontend architectural transition for the global checkout experience. Spearheading the adoption of server components and reducing bundle size by 42%.</p>
+</div>
+<!-- Timeline Item 2 -->
+<div class="relative pl-12">
+<div class="absolute left-0 top-1 w-6 h-6 rounded-full bg-surface-container-highest flex items-center justify-center ring-4 ring-white">
+<span class="w-2 h-2 bg-white rounded-full"></span>
+</div>
+<div class="flex justify-between items-start mb-2">
+<div>
+<h4 class="text-lg font-bold text-on-surface">Software Engineer L4</h4>
+<p class="text-sm font-medium text-primary">Google • 2018 — 2021</p>
+</div>
+<span class="text-[10px] font-black text-slate-400 uppercase">3 years 6 months</span>
+</div>
+<p class="text-sm text-on-surface-variant leading-relaxed">Contributed to the core UI library used by Google Workspace. Optimized rendering pipelines for complex data visualizations in Google Sheets.</p>
+</div>
+</div>
+</section>
+<!-- HR Notes Section -->
+<section class="bg-surface-container-lowest rounded-xl p-8">
+<div class="flex justify-between items-center mb-6">
+<h3 class="text-xl font-extrabold text-on-surface">Internal Notes</h3>
+<button class="flex items-center gap-2 text-primary font-bold text-sm">
+<span class="material-symbols-outlined text-base">add</span> Add Note
+                            </button>
+</div>
+<div class="space-y-4">
+<div class="p-6 bg-surface-container-low rounded-2xl border-l-4 border-primary">
+<div class="flex items-center justify-between mb-3">
+<div class="flex items-center gap-2">
+<span class="text-xs font-black text-on-surface">Marcus Chen</span>
+<span class="text-[10px] text-slate-500">• 2 days ago</span>
+</div>
+<span class="material-symbols-outlined text-slate-400 text-sm">more_horiz</span>
+</div>
+<p class="text-sm text-on-surface-variant italic leading-relaxed">"Had a quick intro call. Elena is very sharp. She mentioned she's looking for a role with more autonomy and a focus on design systems. Highly recommend moving to technical round."</p>
+</div>
+<div class="p-6 bg-surface-container-low rounded-2xl border-l-4 border-slate-300">
+<div class="flex items-center justify-between mb-3">
+<div class="flex items-center gap-2">
+<span class="text-xs font-black text-on-surface">Sarah Miller</span>
+<span class="text-[10px] text-slate-500">• 4 days ago</span>
+</div>
+<span class="material-symbols-outlined text-slate-400 text-sm">more_horiz</span>
+</div>
+<p class="text-sm text-on-surface-variant italic leading-relaxed">"Verified her portfolio. The attention to detail in her UI components is exceptional. Clean code, very modular approach."</p>
+</div>
+</div>
+</section>
+</div>
+</div>
+</div>
+</main>
+</body></html>
