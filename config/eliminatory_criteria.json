@@ -1,0 +1,46 @@
+{
+  "version": "1.0",
+  "description": "Critères éliminatoires appliqués AVANT le scoring ML. Un candidat éliminé ici ne consomme pas de ressource ML et reçoit la décision 'eliminated'. Seuls les critères enabled=true sont actifs.",
+  "rules": [
+    {
+      "id": "min_education",
+      "label": "Niveau d'études minimum",
+      "description": "Élimine les candidats sous un certain niveau de diplôme (1=Bac, 2=Bachelor, 3=Master, 4=PhD)",
+      "field": "education_level",
+      "operator": "gte",
+      "value": 1,
+      "enabled": false,
+      "reason": "Niveau d'études insuffisant pour le poste"
+    },
+    {
+      "id": "required_sectors",
+      "label": "Secteurs acceptés",
+      "description": "Élimine les candidats dont le secteur n'est pas dans la liste. Liste vide = tous acceptés.",
+      "field": "sector",
+      "operator": "in",
+      "value": [],
+      "enabled": false,
+      "reason": "Secteur d'activité non recherché"
+    },
+    {
+      "id": "min_years_experience",
+      "label": "Expérience minimum (années)",
+      "description": "Élimine les candidats avec moins de N années d'expérience",
+      "field": "years_experience",
+      "operator": "gte",
+      "value": 0,
+      "enabled": false,
+      "reason": "Expérience professionnelle insuffisante"
+    },
+    {
+      "id": "min_languages",
+      "label": "Langues minimum",
+      "description": "Élimine les candidats parlant moins de N langues",
+      "field": "nb_languages",
+      "operator": "gte",
+      "value": 1,
+      "enabled": false,
+      "reason": "Maîtrise linguistique insuffisante"
+    }
+  ]
+}

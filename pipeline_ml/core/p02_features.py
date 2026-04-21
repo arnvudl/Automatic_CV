@@ -1,8 +1,15 @@
 """
-p02_features.py — Feature Engineering v3
+p02_features.py — Feature Engineering v4
 Features de base + features anti-biais :
   - exp_per_year_of_age : years_experience / max(age-22, 1)
   - field_match         : adéquation formation / secteur
+  - education_adj       : éducation compressée (Bachelor≈0.3, Master≈0.7)
+                          L'analyse des labels montre que Bachelors invités ont
+                          career_depth ~41 == Masters invités (~40) → le diplôme
+                          ne doit plus dominer, c'est la profondeur de carrière
+                          qui compte (RRK-inspired, Google hiring philosophy).
+  - potential_per_year  : skills acquis par an (GCA proxy — récompense
+                          l'apprentissage rapide chez les juniors)
 """
 
 import numpy as np
@@ -26,6 +33,7 @@ NEW_FEATURES = [
     "potential_score", "junior_potential", "cert_density", "multilingual_score",
     "method_tech_ratio", "tech_per_year", "career_depth", "is_it", "is_finance",
     "exp_per_year_of_age", "field_match",
+    "education_adj", "potential_per_year",
 ]
 
 OBSOLETE_COLS = ["cv_completeness", "red_flag_count"]
@@ -92,6 +100,24 @@ def engineer(df: pd.DataFrame) -> pd.DataFrame:
     df["field_match"] = df.apply(
         lambda r: _field_match(r.get("education_field"), r.get("sector")), axis=1
     )
+
+    # ── Features anti-biais v4 (RRK/GCA inspired) ────────────────────────────
+    #
+    # education_adj : compresse l'échelle 1-4 → 0.0/0.3/0.7/0.8
+    # Analyse des labels : Bachelor invité (career_depth=41) ≈ Master invité (40)
+    # → le diplôme est un bonus, pas un filtre. Réduire son emprise dans le modèle
+    # permet à career_depth et potential d'exprimer leur vraie valeur prédictive.
+    edu_raw = pd.to_numeric(df["education_level"], errors="coerce").fillna(2)
+    edu_map = {1: 0.0, 2: 0.30, 3: 0.70, 4: 0.80}
+    df["education_adj"] = edu_raw.round().astype(int).map(edu_map).fillna(0.30).round(2)
+
+    # potential_per_year : (skills + méthodes + certifs) / années travaillées
+    # Proxy GCA (General Cognitive Ability) — récompense la vitesse d'apprentissage.
+    # Distinct de potential_score (÷ years+1) : ici on divise par années réelles
+    # pour valoriser les juniors qui accumulent des compétences vite.
+    df["potential_per_year"] = (
+        (nb_tech_raw + nb_meth_raw + nb_cert_raw) / years.clip(lower=0.5)
+    ).round(2)
 
     return df
 

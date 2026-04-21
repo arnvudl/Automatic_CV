@@ -26,3 +26,7 @@ Test local — 3 commandes :
 
   Le nœud Score CV (ML) appelle http://api:8000/score — ce nom api fonctionne automatiquement dans Docker Compose que ce soit en local ou sur DO, les deux containers
   sont sur le même réseau interne.
+
+---
+
+uvicorn main:app --reload --port 8000

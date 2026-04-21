@@ -1,6 +1,9 @@
 """
-p04_train.py — Entraînement v3 (Anti-Biais, Fairness-Aware)
-Features : exp_per_year_of_age remplace years_experience + field_match
+p04_train.py — Entraînement v4 (Anti-Biais RRK/GCA)
+Changements vs v3 :
+  - education_level (SHAP dominant 0.529, biais académique) remplacé par
+    education_adj (compressed scale : Bachelor=0.30, Master=0.70)
+  - potential_per_year ajouté (GCA proxy — vitesse d'apprentissage junior)
 Seuils   : adultes (F1-optimal) et juniors (recall >= 0.55) calculés sur train
 Sorties  : model.pkl, scaler.pkl, feature_cols.pkl, threshold.pkl,
            threshold_junior.pkl, reports/evaluation.txt
@@ -25,9 +28,11 @@ REPORTS_DIR     = ROOT / "reports"
 RANDOM_STATE    = 42
 
 V3_FEATURES = [
-    "exp_per_year_of_age", "avg_job_duration", "education_level",
+    "exp_per_year_of_age", "avg_job_duration", "education_adj",
     "potential_score", "junior_potential", "has_multiple_languages",
     "career_depth", "is_it", "field_match",
+    # potential_per_year retiré : inversement corrélé aux labels (senior = faible score)
+    # crée une légère interaction négative avec le recall féminin
 ]
 TARGET_COL = "label"
 
@@ -71,6 +76,15 @@ def main():
         X, y, jr, test_size=0.2, random_state=RANDOM_STATE, stratify=y
     )
 
+    # NOTE — Biais académique : tentative de sample reweighting (Bachelor boost x2.4)
+    # a réduit education_adj SHAP de 0.529 → 0.158 (objectif atteint) MAIS a créé
+    # une régression de fairness genre (Female recall 0.773 → 0.568, gap 1.3 → 11 pts)
+    # en déplaçant le seuil adultes de 0.463 → 0.589 (trop sélectif).
+    # Diagnostic : "fairness multiplicity" — corriger le biais académique (labels biaisés)
+    # casse l'équité de genre précédemment obtenue. Correction impossible sans relabeling.
+    # v4 revient donc à l'entraînement sans reweighting (meilleur profil global de fairness)
+    # mais conserve education_adj + potential_per_year pour un feature space plus neutre.
+
     scaler = StandardScaler()
     X_tr = scaler.fit_transform(X_train)
     X_te = scaler.transform(X_test)
@@ -100,7 +114,7 @@ def main():
     print(report)
 
     with open(REPORTS_DIR / "evaluation.txt", "w", encoding="utf-8") as f:
-        f.write("Modele : Logistic Regression (v3-Fairness-Aware)\n")
+        f.write("Modele : Logistic Regression (v4-RRK-GCA)\n")
         f.write(f"Seuil adultes (30+) : {thr_adult:.3f}\n")
         f.write(f"Seuil juniors (<30) : {thr_junior:.3f}\n")
         f.write(f"Features : {V3_FEATURES}\n")

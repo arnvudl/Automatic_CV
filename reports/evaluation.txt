@@ -1,7 +1,7 @@
-Modele : Logistic Regression (v3-Fairness-Aware)
+Modele : Logistic Regression (v4-RRK-GCA)
 Seuil adultes (30+) : 0.462
 Seuil juniors (<30) : 0.494
-Features : ['exp_per_year_of_age', 'avg_job_duration', 'education_level', 'potential_score', 'junior_potential', 'has_multiple_languages', 'career_depth', 'is_it', 'field_match']
+Features : ['exp_per_year_of_age', 'avg_job_duration', 'education_adj', 'potential_score', 'junior_potential', 'has_multiple_languages', 'career_depth', 'is_it', 'field_match']
 AUC-ROC  : 0.797
 
               precision    recall  f1-score   support
