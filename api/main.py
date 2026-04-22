@@ -79,8 +79,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
-        "https://ton-projet.vercel.app",  # URL Vercel
-        "https://votredomaine.com",  # domaine custom si tu en as un
+        "https://ats.lony.app",
+        "https://n8n.lony.app",
     ],
     allow_methods=["GET", "POST", "PATCH", "DELETE"],
     allow_headers=["*"],
