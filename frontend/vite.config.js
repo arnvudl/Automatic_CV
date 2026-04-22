@@ -6,11 +6,12 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/candidates': 'http://localhost:8000',
-      '/stats':      'http://localhost:8000',
-      '/score':      'http://localhost:8000',
-      '/comments':   'http://localhost:8000',
-      '/analyse':    'http://localhost:8000',
+      '/candidates': { target: 'http://localhost:8000', changeOrigin: true },
+      '/stats':      { target: 'http://localhost:8000', changeOrigin: true },
+      '/score':      { target: 'http://localhost:8000', changeOrigin: true },
+      '/comments':   { target: 'http://localhost:8000', changeOrigin: true },
+      '/events':     { target: 'http://localhost:8000', changeOrigin: true,
+                       ws: false },  // SSE — pas WS
     }
   }
 })

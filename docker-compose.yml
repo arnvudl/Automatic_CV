@@ -1,33 +1,69 @@
 version: '3.8'
 
 services:
+
+  # ── PostgreSQL ────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: cv_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${POSTGRES_DB:-cv_intelligence}
+      POSTGRES_USER:     ${POSTGRES_USER:-cv_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cv_pass}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"          # exposé pour accès local (pgAdmin, etc.)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cv_user}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── FastAPI ───────────────────────────────────────────────────────
   api:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: cv_api
+    restart: unless-stopped
     ports:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-cv_user}:${POSTGRES_PASSWORD:-cv_pass}@db:5432/${POSTGRES_DB:-cv_intelligence}
     volumes:
       - ./data:/app/data
-      - ./models:/app/models        # modèles ML (model.pkl, scaler.pkl, ...)
-    restart: unless-stopped
+      - ./models:/app/models
+    depends_on:
+      db:
+        condition: service_healthy
 
+  # ── n8n ───────────────────────────────────────────────────────────
   n8n:
     image: docker.n8n.io/n8nio/n8n
     container_name: cv_n8n
+    restart: unless-stopped
     ports:
       - "5678:5678"
     environment:
-      - N8N_HOST=${N8N_HOST:-localhost}
-      - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678/}
+      N8N_HOST:    ${N8N_HOST:-localhost}
+      WEBHOOK_URL: ${WEBHOOK_URL:-http://localhost:5678/}
+      DB_TYPE:     postgresdb
+      DB_POSTGRESDB_HOST:     db
+      DB_POSTGRESDB_PORT:     5432
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB:-cv_intelligence}
+      DB_POSTGRESDB_USER:     ${POSTGRES_USER:-cv_user}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-cv_pass}
+      DB_POSTGRESDB_SCHEMA:   n8n
     volumes:
       - n8n_data:/home/node/.n8n
-    restart: unless-stopped
     depends_on:
-      - api
+      db:
+        condition: service_healthy
 
 volumes:
+  pg_data:
   n8n_data:

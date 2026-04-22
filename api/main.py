@@ -23,10 +23,14 @@ try:
 except ImportError:
     pass  # python-dotenv non installé — variables d'env déjà définies dans le shell
 
+import asyncio
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
+
+# ── Database ─────────────────────────────────────────────────────────
+from api.database import init_db, get_db, Candidate as CandidateModel
 
 try:
     from groq import Groq as _Groq
@@ -77,6 +81,58 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PATCH", "DELETE"],
     allow_headers=["*"],
 )
+
+# ── SSE broadcast ────────────────────────────────────────────────
+_sse_clients: set[asyncio.Queue] = set()
+
+async def _broadcast(event: dict):
+    """Envoie un événement SSE à tous les clients connectés."""
+    dead = set()
+    for q in _sse_clients:
+        try:
+            q.put_nowait(event)
+        except asyncio.QueueFull:
+            dead.add(q)
+    _sse_clients.difference_update(dead)
+
+
+@app.on_event("startup")
+def startup():
+    init_db()
+    logger.info("Base de données initialisée.")
+
+
+@app.get("/events", tags=["realtime"])
+async def sse_stream():
+    """
+    Server-Sent Events — le dashboard React s'y connecte pour
+    recevoir les mises à jour en temps réel (nouveau candidat scoré, etc.)
+    """
+    queue: asyncio.Queue = asyncio.Queue(maxsize=50)
+    _sse_clients.add(queue)
+
+    async def generator():
+        try:
+            # Ping initial pour confirmer la connexion
+            yield "event: connected\ndata: {}\n\n"
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=25)
+                    import json as _json
+                    yield f"event: {event['type']}\ndata: {_json.dumps(event['data'])}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": heartbeat\n\n"   # évite la coupure nginx/proxy
+        finally:
+            _sse_clients.discard(queue)
+
+    return StreamingResponse(
+        generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        }
+    )
 
 
 # ── Helpers ──────────────────────────────────────────────────────
@@ -172,14 +228,63 @@ CANDIDATE_FIELDS = [
 ]
 
 def _save_candidate(record: dict):
-    """Ajoute un candidat au fichier CSV live."""
+    """
+    Persiste un candidat :
+    1. PostgreSQL / SQLite via SQLAlchemy (source de vérité)
+    2. CSV legacy en parallèle (rétrocompatibilité pipeline ML)
+    """
+    # ── DB ────────────────────────────────────────────────
+    try:
+        with get_db() as db:
+            existing = db.get(CandidateModel, record["candidate_id"])
+            if existing:
+                # Mise à jour si re-soumission du même CV
+                for k, v in record.items():
+                    if hasattr(existing, k):
+                        setattr(existing, k, v)
+            else:
+                received = record.get("received_at")
+                if isinstance(received, str):
+                    try:
+                        received = datetime.fromisoformat(received)
+                    except ValueError:
+                        received = datetime.utcnow()
+                obj = CandidateModel(
+                    candidate_id=record["candidate_id"],
+                    received_at=received,
+                    source_filename=record.get("source_filename"),
+                    name=record.get("name"),
+                    email=record.get("email"),
+                    phone=record.get("phone"),
+                    gender=record.get("gender"),
+                    age=record.get("age"),
+                    sector=record.get("sector"),
+                    target_role=record.get("target_role"),
+                    years_experience=record.get("years_experience"),
+                    education_level=record.get("education_level"),
+                    score=record.get("score"),
+                    decision=record.get("decision"),
+                    threshold_used=record.get("threshold_used"),
+                    priority_rank=record.get("priority_rank"),
+                    eliminated_reason=record.get("eliminated_reason"),
+                    shap_json=record.get("shap_json"),
+                    status=record.get("status", "inbox"),
+                )
+                db.add(obj)
+    except Exception as db_err:
+        logger.warning(f"DB write failed ({db_err}) — CSV fallback only")
+
+    # ── CSV fallback ──────────────────────────────────────
     fieldnames = CANDIDATE_FIELDS
     exists = CANDIDATES_FILE.exists()
-    with CANDIDATES_FILE.open("a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
-        if not exists:
-            writer.writeheader()
-        writer.writerow(record)
+    try:
+        with CANDIDATES_FILE.open("a", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+            if not exists:
+                writer.writeheader()
+            writer.writerow(record)
+    except Exception as csv_err:
+        logger.warning(f"CSV write failed: {csv_err}")
 
 
 IT_KW      = {"computer","software","data","information","it","computing","engineering","technology","networks","ai"}
@@ -290,18 +395,24 @@ async def score_cv(file: UploadFile = File(...)):
     logger.info(f"Scoré : {id_row.get('name')} → {result['decision']} "
                 f"(score={result['score']:.3f}, rank={result['priority_rank']}e percentile)")
 
-    return {
-        "candidate_id":    candidate_id,
-        "name":            id_row.get("name"),
-        "email":           id_row.get("email"),
-        "score":           result["score"],
-        "priority_rank":   result["priority_rank"],
-        "decision":        result["decision"],
+    # ── SSE broadcast ─────────────────────────────────────────────
+    response_payload = {
+        "candidate_id":      candidate_id,
+        "name":              id_row.get("name"),
+        "email":             id_row.get("email"),
+        "score":             result["score"],
+        "priority_rank":     result["priority_rank"],
+        "decision":          result["decision"],
         "eliminated_reason": result.get("eliminated_reason"),
-        "threshold_used":  result["threshold_used"],
-        "sector":          feat_row.get("sector"),
-        "years_experience": feat_row.get("years_experience"),
+        "threshold_used":    result["threshold_used"],
+        "sector":            feat_row.get("sector"),
+        "years_experience":  feat_row.get("years_experience"),
+        "status":            "inbox",
+        "received_at":       record["received_at"],
     }
+    asyncio.create_task(_broadcast({"type": "candidate_scored", "data": response_payload}))
+
+    return response_payload
 
 
 @app.post("/api/v1/candidates", tags=["n8n"])
@@ -328,11 +439,34 @@ async def receive_cv_n8n(
 
 @app.get("/candidates", tags=["rh"])
 def list_candidates(
-    decision: Optional[str] = Query(None, description="invite | reject"),
-    sector:   Optional[str] = Query(None),
-    min_score: float = Query(0.0),
+    decision:  Optional[str] = Query(None, description="invite | reject | eliminated"),
+    sector:    Optional[str] = Query(None),
+    status:    Optional[str] = Query(None, description="inbox | review | interview | rejected"),
+    min_score: float         = Query(0.0),
+    limit:     int           = Query(200),
 ):
-    """Retourne la liste des candidats scorés (pour la page RH)."""
+    """Retourne la liste des candidats scorés (DB en priorité, CSV en fallback)."""
+    from sqlalchemy import desc as _desc
+    try:
+        with get_db() as db:
+            q = db.query(CandidateModel)
+            if decision:
+                q = q.filter(CandidateModel.decision == decision)
+            if sector:
+                q = q.filter(CandidateModel.sector.ilike(sector))
+            if status:
+                q = q.filter(CandidateModel.status == status)
+            q = q.filter(CandidateModel.score >= min_score)
+            rows = q.order_by(_desc(CandidateModel.score)).limit(limit).all()
+            if rows:
+                return [
+                    {c.name: getattr(r, c.name) for c in r.__table__.columns}
+                    for r in rows
+                ]
+    except Exception as db_err:
+        logger.warning(f"DB read failed ({db_err}), CSV fallback")
+
+    # CSV fallback
     if not CANDIDATES_FILE.exists():
         return []
     df = pd.read_csv(CANDIDATES_FILE)
@@ -340,8 +474,10 @@ def list_candidates(
         df = df[df["decision"] == decision]
     if sector:
         df = df[df["sector"].str.lower() == sector.lower()]
+    if status and "status" in df.columns:
+        df = df[df["status"] == status]
     df = df[pd.to_numeric(df["score"], errors="coerce").fillna(0) >= min_score]
-    df = df.sort_values("score", ascending=False)
+    df = df.sort_values("score", ascending=False).head(limit)
     return df.fillna("").to_dict(orient="records")
 
 
@@ -349,29 +485,65 @@ class StatusUpdate(BaseModel):
     status: str  # inbox | review | interview | rejected
 
 @app.patch("/candidates/{candidate_id}/status", tags=["rh"])
-def update_candidate_status(candidate_id: str, body: StatusUpdate):
-    """Met à jour le statut Kanban d'un candidat."""
+async def update_candidate_status(candidate_id: str, body: StatusUpdate):
+    """Met à jour le statut Kanban d'un candidat (DB + CSV)."""
     valid = {"inbox", "review", "interview", "rejected"}
     if body.status not in valid:
         raise HTTPException(400, f"Statut invalide. Valeurs acceptées : {valid}")
-    if not CANDIDATES_FILE.exists():
-        raise HTTPException(404, "Aucun candidat enregistré.")
-    df = pd.read_csv(CANDIDATES_FILE)
-    if candidate_id not in df["candidate_id"].values:
+
+    # DB
+    db_ok = False
+    try:
+        with get_db() as db:
+            obj = db.get(CandidateModel, candidate_id)
+            if obj:
+                obj.status = body.status
+                db_ok = True
+    except Exception as db_err:
+        logger.warning(f"DB status update failed ({db_err})")
+
+    # CSV fallback
+    if CANDIDATES_FILE.exists():
+        try:
+            df = pd.read_csv(CANDIDATES_FILE)
+            if candidate_id in df["candidate_id"].values:
+                if "status" not in df.columns:
+                    df["status"] = "inbox"
+                df.loc[df["candidate_id"] == candidate_id, "status"] = body.status
+                df.to_csv(CANDIDATES_FILE, index=False)
+        except Exception:
+            pass
+
+    if not db_ok and not CANDIDATES_FILE.exists():
         raise HTTPException(404, f"Candidat {candidate_id} introuvable.")
-    if "status" not in df.columns:
-        df["status"] = "inbox"
-    df.loc[df["candidate_id"] == candidate_id, "status"] = body.status
-    df.to_csv(CANDIDATES_FILE, index=False)
+
+    # SSE broadcast
+    await _broadcast({"type": "status_updated",
+                      "data": {"candidate_id": candidate_id, "status": body.status}})
     return {"candidate_id": candidate_id, "status": body.status}
 
 @app.get("/stats", tags=["rh"])
 def get_stats():
     """Stats globales pour le dashboard RH."""
-    if not CANDIDATES_FILE.exists():
-        return {"total": 0, "invited": 0, "rejected": 0, "invite_rate": 0,
-                "today": 0, "borderline": 0, "pending_review": 0, "avg_score": 0}
-    df = pd.read_csv(CANDIDATES_FILE)
+    # ── Lecture DB ────────────────────────────────────────────────
+    df = None
+    try:
+        with get_db() as db:
+            rows = db.query(CandidateModel).all()
+            if rows:
+                df = pd.DataFrame([
+                    {c.name: getattr(r, c.name) for c in r.__table__.columns}
+                    for r in rows
+                ])
+    except Exception as db_err:
+        logger.warning(f"DB read for stats failed ({db_err})")
+
+    # ── Fallback CSV ──────────────────────────────────────────────
+    if df is None:
+        if not CANDIDATES_FILE.exists():
+            return {"total": 0, "invited": 0, "rejected": 0, "invite_rate": 0,
+                    "today": 0, "borderline": 0, "pending_review": 0, "avg_score": 0}
+        df = pd.read_csv(CANDIDATES_FILE)
     if "status" not in df.columns:
         df["status"] = "inbox"
     df["score_num"] = pd.to_numeric(df["score"], errors="coerce").fillna(0)

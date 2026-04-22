@@ -6,3 +6,8 @@ numpy
 joblib
 scikit-learn
 shap
+# Database
+sqlalchemy>=2.0
+psycopg2-binary    # PostgreSQL driver
+python-dotenv
+groq

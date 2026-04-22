@@ -41,6 +41,7 @@ RE_DOB          = re.compile(r"Date of Birth:\s*(.*)", re.IGNORECASE)
 RE_EMAIL        = re.compile(r"Email:\s*(.*)", re.IGNORECASE)
 RE_EMAIL_MD     = re.compile(r"\[([^\]]+)\]\(mailto:[^\)]+\)")
 RE_PHONE        = re.compile(r"Phone:\s*(.*)", re.IGNORECASE)
+RE_ADDRESS      = re.compile(r"Address:\s*(.*)", re.IGNORECASE)
 RE_TARGET_ROLE  = re.compile(r"Target Role:\s*(.*)", re.IGNORECASE)
 RE_STATUS       = re.compile(r"(?:Status|Decision):\s*(.*)", re.IGNORECASE)
 RE_SECTIONS     = re.compile(r"(Education|Experience|Skills|Languages|Certifications):", re.IGNORECASE)
@@ -111,6 +112,7 @@ def parse_cv(filepath: Path, labels_dict: dict) -> tuple:
     dob_m     = RE_DOB.search(content)
     email_m   = RE_EMAIL.search(content)
     phone_m   = RE_PHONE.search(content)
+    address_m = RE_ADDRESS.search(content)
 
     name   = name_m.group(1).strip()   if name_m   else None
     gender = gender_m.group(1).strip() if gender_m else None
@@ -123,6 +125,19 @@ def parse_cv(filepath: Path, labels_dict: dict) -> tuple:
         email = None
     phone  = phone_m.group(1).strip()  if phone_m  else None
     age    = _calculate_age(dob)
+
+    # Adresse atomique : "123 Street, 12345 City, Country"
+    address = city = country = None
+    if address_m:
+        address = address_m.group(1).strip()
+        parts   = [p.strip() for p in address.split(",")]
+        if len(parts) >= 3:
+            country = parts[-1]
+            # Ville = dernier mot(s) de l'avant-dernier segment (après le code postal)
+            city_part = parts[-2].strip()
+            city = re.sub(r'^\d+\s*', '', city_part).strip() or city_part
+        elif len(parts) == 2:
+            country = parts[-1]
 
     cv_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, filename))
 
@@ -221,13 +236,16 @@ def parse_cv(filepath: Path, labels_dict: dict) -> tuple:
         nb_certifications = len([ln for ln in sections["Certifications"].split('\n') if ln.strip()])
 
     identity_row = {
-        'cv_id':  cv_id,
+        'cv_id':           cv_id,
         'source_filename': filename,
-        'name':   name,
-        'email':  email,
-        'phone':  phone,
-        'gender': gender,
-        'age':    age,
+        'name':            name,
+        'email':           email,
+        'phone':           phone,
+        'gender':          gender,
+        'age':             age,
+        'address':         address,
+        'city':            city,
+        'country':         country,
     }
 
     if years_experience < 3:
@@ -568,7 +586,10 @@ def main():
 
     identities_path = PROCESSED_FOLDER / "identities.csv"
     with identities_path.open('w', newline='', encoding='utf-8') as f:
-        writer = csv.DictWriter(f, fieldnames=['cv_id', 'source_filename', 'name', 'email', 'phone', 'gender', 'age'])
+        writer = csv.DictWriter(f, fieldnames=[
+            'cv_id', 'source_filename', 'name', 'email', 'phone',
+            'gender', 'age', 'address', 'city', 'country',
+        ])
         writer.writeheader()
         writer.writerows(identities)
 
