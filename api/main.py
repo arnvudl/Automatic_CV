@@ -77,7 +77,11 @@ app = FastAPI(title="CV-Intelligence API", version="1.0.0", docs_url="/docs")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "https://ton-projet.vercel.app",  # URL Vercel
+        "https://votredomaine.com",  # domaine custom si tu en as un
+    ],
     allow_methods=["GET", "POST", "PATCH", "DELETE"],
     allow_headers=["*"],
 )
