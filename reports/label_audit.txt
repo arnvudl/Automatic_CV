@@ -1,0 +1,101 @@
+
+AUDIT DE BIAIS — LABELS BRUTS
+────────────────────────────────────────────────────────────
+Dataset : 500 CV  |  Invités : 100 (20.0%)  |  Rejetés : 400 (80.0%)
+────────────────────────────────────────────────────────────
+Lecture : * p<0.05  ** p<0.01  *** p<0.001  ns = non significatif
+Δ global = écart au taux moyen d'invitation (20.0%)
+
+
+============================================================
+  1. BIAIS DE GENRE
+============================================================
+Groupe   N  Invités  Taux (%) Δ global  p-value Sig. Direction
+  Male 267       56      21.0    +1.0%   0.5601   ns  ≈ neutre
+Female 233       44      18.9    -1.1%   0.5601   ns  ≈ neutre
+
+============================================================
+  2. BIAIS DE NIVEAU D'ÉDUCATION
+============================================================
+  Groupe   N  Invités  Taux (%) Δ global  p-value Sig.    Direction
+  Master 209       63      30.1   +10.1%      0.0  ***   ↑ favorisé
+Bachelor 291       37      12.7    -7.3%      0.0  *** ↓ défavorisé
+
+  → Un écart significatif ici signifie que les recruteurs humains
+    ont historiquement favorisé certains diplômes dans leurs décisions.
+    Ce biais est encodé dans les labels et sera appris par le modèle.
+
+============================================================
+  3. BIAIS D'ÂGE
+============================================================
+        Groupe   N  Invités  Taux (%) Δ global  p-value Sig.    Direction
+Adulte (30-45) 323       82      25.4    +5.4%      0.0  ***   ↑ favorisé
+  Junior (<30) 177       18      10.2    -9.8%      0.0  *** ↓ défavorisé
+
+============================================================
+  4. BIAIS GEOGRAPHIQUE (pays de residence)
+============================================================
+     Groupe   N  Invités  Taux (%) Δ global  p-value Sig.    Direction
+Netherlands  47       13      27.7    +7.7%   0.1678   ns   ↑ favorisé
+    Ireland  36        9      25.0    +5.0%   0.4362   ns     ≈ neutre
+        USA 114       28      24.6    +4.6%   0.1658   ns     ≈ neutre
+     Poland  49       12      24.5    +4.5%   0.4081   ns     ≈ neutre
+      India  42       10      23.8    +3.8%   0.5190   ns     ≈ neutre
+      Italy  46       10      21.7    +1.7%   0.7570   ns     ≈ neutre
+    Nigeria  42        5      11.9    -8.1%   0.1706   ns ↓ défavorisé
+     France  51        6      11.8    -8.2%   0.1208   ns ↓ défavorisé
+   Portugal  39        4      10.3    -9.7%   0.1442   ns ↓ défavorisé
+    Germany  34        3       8.8   -11.2%   0.1188   ns ↓ défavorisé
+
+  -> Attention : le pays de residence n'est PAS utilise comme feature ML
+     (ce serait discriminatoire). Il est ici uniquement pour l'audit des labels.
+
+============================================================
+  5. BIAIS DE SECTEUR
+============================================================
+ Groupe   N  Invités  Taux (%) Δ global  p-value Sig. Direction
+     IT 393       80      20.4    +0.4%   0.7027   ns  ≈ neutre
+Finance 107       20      18.7    -1.3%   0.7027   ns  ≈ neutre
+
+============================================================
+  6. FEATURES — DIFFERENCE INVITES vs REJETES (Mann-Whitney U)
+============================================================
+            Feature  Moy. invités  Moy. rejetés      Δ  p-value Sig. Biais potentiel
+   years_experience         7.392         4.791  2.601   0.0000  ***             OUI
+   avg_job_duration         4.719         2.774  1.945   0.0000  ***             OUI
+    education_level         2.630         2.365  0.265   0.0000  ***             OUI
+  nb_certifications         2.070         1.705  0.365   0.0010   **             OUI
+       nb_languages         1.930         1.862  0.067   0.0674   ns                
+  nb_methods_skills         4.340         4.175  0.165   0.1481   ns                
+nb_technical_skills         4.950         5.102 -0.152   0.2768   ns                
+            nb_jobs         2.010         1.950  0.060   0.5571   ns                
+       total_skills        12.700        12.608  0.092   0.5805   ns                
+      english_level         5.490         5.480  0.010   0.8584   ns                
+ career_progression         0.000         0.000  0.000   1.0000   ns                
+
+  → Les features marquées 'OUI' (Biais potentiel) ont une différence
+    statistiquement significative ET pratiquement importante entre
+    invités et rejetés. Elles reflètent les critères des recruteurs humains.
+    Si ces critères sont eux-mêmes biaisés, le modèle amplifiera ce biais.
+
+============================================================
+  7. CROISEMENT EDUCATION x GENRE
+============================================================
+edu_label gender   N  Invités  Taux (%)
+ Bachelor Female 139       15      10.8
+ Bachelor   Male 152       22      14.5
+   Master Female  94       29      30.9
+   Master   Male 115       34      29.6
+
+============================================================
+  8. SYNTHESE — BIAIS CONFIRMES DANS LES LABELS
+============================================================
+Biais statistiquement détectés dans les labels :
+
+  ● Biais académique : Master (30.1%) vs Bachelor (12.7%) — écart 17.4%
+  ● Biais de genre : hommes favorisés — écart 2.1% (M=21.0%, F=18.9%)
+  ● Biais d'âge : Adulte (30-45) favorisé (25.4%) vs Junior (<30) (10.2%)
+
+  ⚠ Ces biais sont dans les DONNÉES, pas dans le modèle.
+    Un modèle entraîné sur ces labels les reproduira fidèlement.
+    La seule correction radicale est le relabeling humain des cas litigieux.
