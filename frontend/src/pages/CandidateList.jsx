@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Icon } from '../components/Icon'
-import { getCandidates } from '../lib/api'
+import { getCandidates, deleteCandidate } from '../lib/api'
 
 const AVATAR_COLORS = [
   'bg-blue-100 text-primary',
@@ -49,6 +49,8 @@ export default function CandidateList({ onNavigate }) {
   const [scoreFilter, setScoreFilter] = useState('all')
   const [sectorFilter, setSectorFilter] = useState('all')
   const [decisionFilter, setDecisionFilter] = useState('all')
+  const [deleting, setDeleting]     = useState(null)
+  const [confirmDelete, setConfirmDelete] = useState(null)
 
   useEffect(() => {
     getCandidates({ limit: 100 })
@@ -56,6 +58,15 @@ export default function CandidateList({ onNavigate }) {
       .catch(() => setCandidates([]))
       .finally(() => setLoading(false))
   }, [])
+
+  const handleDelete = async (id) => {
+    setDeleting(id)
+    try {
+      await deleteCandidate(id)
+      setCandidates(prev => prev.filter(c => c.candidate_id !== id))
+    } catch (_) {}
+    finally { setDeleting(null); setConfirmDelete(null) }
+  }
 
   // Sectors uniques depuis les données
   const sectors = [...new Set(candidates.map(c => c.sector).filter(Boolean))]
@@ -78,6 +89,29 @@ export default function CandidateList({ onNavigate }) {
 
   return (
     <div className="flex min-h-screen">
+      {/* Modale confirmation suppression */}
+      {confirmDelete && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center" onClick={() => setConfirmDelete(null)}>
+          <div className="bg-surface-container-lowest rounded-2xl p-8 shadow-ambient-lg max-w-sm w-full mx-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-error"><Icon name="warning" size={28} /></span>
+              <h3 className="text-lg font-bold text-on-surface">Supprimer le candidat ?</h3>
+            </div>
+            <p className="text-sm text-on-surface-variant mb-6">Cette action est irréversible. Le candidat sera supprimé de la base de données.</p>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setConfirmDelete(null)}
+                className="px-5 py-2 rounded-xl bg-surface-container text-on-surface font-semibold text-sm hover:bg-surface-container-high transition-colors">
+                Annuler
+              </button>
+              <button onClick={() => handleDelete(confirmDelete)} disabled={deleting === confirmDelete}
+                className="px-5 py-2 rounded-xl bg-error text-white font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2">
+                {deleting === confirmDelete ? <Icon name="hourglass_empty" size={16} /> : <Icon name="delete" size={16} />}
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Sidebar Filters */}
       <aside className="w-72 flex-shrink-0 p-8 space-y-8">
         <div className="bg-surface-container-low p-6 rounded-3xl">
@@ -239,10 +273,18 @@ export default function CandidateList({ onNavigate }) {
                           {stage.label}
                         </span>
                       </td>
-                      <td className="px-8 py-5 text-right">
+                      <td className="px-8 py-5 text-right" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button className="p-2 hover:bg-surface-container-high rounded-lg text-on-surface-variant"><Icon name="visibility" size={18} /></button>
-                          <button className="p-2 hover:bg-surface-container-high rounded-lg text-on-surface-variant"><Icon name="more_vert" size={18} /></button>
+                          <button
+                            onClick={() => setConfirmDelete(c.candidate_id)}
+                            className="p-2 hover:bg-error-container rounded-lg text-on-surface-variant hover:text-error transition-colors">
+                            <Icon name="delete" size={18} />
+                          </button>
+                          <button
+                            onClick={() => onNavigate('profile', c.candidate_id)}
+                            className="p-2 hover:bg-surface-container-high rounded-lg text-on-surface-variant">
+                            <Icon name="visibility" size={18} />
+                          </button>
                         </div>
                       </td>
                     </tr>

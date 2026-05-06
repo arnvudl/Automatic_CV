@@ -491,7 +491,7 @@ class StatusUpdate(BaseModel):
 @app.patch("/candidates/{candidate_id}/status", tags=["rh"])
 async def update_candidate_status(candidate_id: str, body: StatusUpdate):
     """Met à jour le statut Kanban d'un candidat (DB + CSV)."""
-    valid = {"inbox", "review", "interview", "rejected"}
+    valid = {"inbox", "review", "interview", "rejected", "archived", "interview_scheduled"}
     if body.status not in valid:
         raise HTTPException(400, f"Statut invalide. Valeurs acceptées : {valid}")
 
@@ -525,6 +525,37 @@ async def update_candidate_status(candidate_id: str, body: StatusUpdate):
     await _broadcast({"type": "status_updated",
                       "data": {"candidate_id": candidate_id, "status": body.status}})
     return {"candidate_id": candidate_id, "status": body.status}
+
+
+@app.delete("/candidates/{candidate_id}", tags=["rh"])
+async def delete_candidate(candidate_id: str):
+    """Supprime un candidat de la DB et du CSV."""
+    deleted = False
+    try:
+        with get_db() as db:
+            obj = db.get(CandidateModel, candidate_id)
+            if obj:
+                db.delete(obj)
+                deleted = True
+    except Exception as db_err:
+        logger.warning(f"DB delete failed ({db_err})")
+
+    if CANDIDATES_FILE.exists():
+        try:
+            df = pd.read_csv(CANDIDATES_FILE)
+            if candidate_id in df["candidate_id"].values:
+                df = df[df["candidate_id"] != candidate_id]
+                df.to_csv(CANDIDATES_FILE, index=False)
+                deleted = True
+        except Exception:
+            pass
+
+    if not deleted:
+        raise HTTPException(404, f"Candidat {candidate_id} introuvable.")
+
+    await _broadcast({"type": "candidate_deleted", "data": {"candidate_id": candidate_id}})
+    return {"deleted": True, "candidate_id": candidate_id}
+
 
 @app.get("/stats", tags=["rh"])
 def get_stats():

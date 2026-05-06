@@ -1,11 +1,11 @@
 import { Icon } from './Icon'
 
 const NAV_ITEMS = [
-  { id: 'dashboard',  label: 'Dashboard',  icon: 'dashboard' },
-  { id: 'jobs',       label: 'Jobs',        icon: 'work_outline' },
-  { id: 'candidates', label: 'Candidates',  icon: 'group' },
-  { id: 'calendar',   label: 'Interviews',  icon: 'calendar_today' },
-  { id: 'settings',   label: 'Settings',    icon: 'settings' },
+  { id: 'dashboard',  label: 'Tableau de bord', icon: 'dashboard' },
+  { id: 'jobs',       label: 'Offres',           icon: 'work_outline' },
+  { id: 'candidates', label: 'Candidats',        icon: 'group' },
+  { id: 'calendar',   label: 'Entretiens',       icon: 'calendar_today' },
+  { id: 'settings',   label: 'Paramètres',       icon: 'settings' },
 ]
 
 export default function Sidebar({ active, onNavigate }) {
@@ -47,12 +47,12 @@ export default function Sidebar({ active, onNavigate }) {
         <a href="https://docs.lony.app" target="_blank" rel="noopener noreferrer"
           className="flex items-center gap-3 px-4 py-2 text-slate-600 hover:text-primary transition-all text-sm">
           <Icon name="help" size={20} />
-          <span>Help Center</span>
+          <span>Centre d'aide</span>
         </a>
         <button onClick={() => onNavigate('settings')}
           className="flex items-center gap-3 px-4 py-2 text-slate-600 hover:text-error transition-all text-sm">
           <Icon name="logout" size={20} />
-          <span>Logout</span>
+          <span>Déconnexion</span>
         </button>
       </div>
     </aside>

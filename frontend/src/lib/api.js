@@ -46,6 +46,9 @@ export const scoreCV = (file) => {
 }
 
 // ── Comments ─────────────────────────────────────────────────────────
+export const deleteCandidate = (id) =>
+  request(`/candidates/${id}`, { method: 'DELETE' })
+
 export const getComments    = (id)           => request(`/comments/${id}`)
 export const addComment     = (id, author, text) =>
   request(`/comments/${id}`, { method: 'POST', body: JSON.stringify({ author, text }) })
