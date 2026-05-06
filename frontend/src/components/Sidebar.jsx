@@ -44,11 +44,13 @@ export default function Sidebar({ active, onNavigate }) {
 
       {/* Bottom */}
       <div className="flex flex-col space-y-1 border-t border-outline-variant/20 pt-6">
-        <button className="flex items-center gap-3 px-4 py-2 text-slate-600 hover:text-primary transition-all text-sm">
+        <a href="https://docs.lony.app" target="_blank" rel="noopener noreferrer"
+          className="flex items-center gap-3 px-4 py-2 text-slate-600 hover:text-primary transition-all text-sm">
           <Icon name="help" size={20} />
           <span>Help Center</span>
-        </button>
-        <button className="flex items-center gap-3 px-4 py-2 text-slate-600 hover:text-error transition-all text-sm">
+        </a>
+        <button onClick={() => onNavigate('settings')}
+          className="flex items-center gap-3 px-4 py-2 text-slate-600 hover:text-error transition-all text-sm">
           <Icon name="logout" size={20} />
           <span>Logout</span>
         </button>

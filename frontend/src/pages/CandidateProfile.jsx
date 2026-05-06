@@ -1,159 +1,251 @@
+import { useState, useEffect } from 'react'
 import { Icon } from '../components/Icon'
+import { getCandidate, updateStatus } from '../lib/api'
 
-const SKILLS = ['React v18', 'TypeScript', 'Next.js', 'Tailwind CSS', 'Redux Toolkit', 'Node.js', 'AWS']
-
-const WORK_HISTORY = [
-  { title: 'Senior Software Engineer', company: 'Stripe', period: '2021 — Present', duration: '3 years 2 months', desc: 'Leading the frontend architectural transition for the global checkout experience. Spearheading the adoption of server components and reducing bundle size by 42%.', active: true },
-  { title: 'Software Engineer L4', company: 'Google', period: '2018 — 2021', duration: '3 years 6 months', desc: 'Contributed to the core UI library used by Google Workspace. Optimized rendering pipelines for complex data visualizations in Google Sheets.', active: false },
+const AVATAR_COLORS = [
+  'bg-blue-100 text-primary',
+  'bg-secondary-fixed text-secondary',
+  'bg-green-100 text-tertiary',
+  'bg-purple-100 text-purple-700',
+  'bg-amber-100 text-amber-700',
 ]
 
-const NOTES = [
-  { author: 'Marcus Chen', ago: '2 days ago', text: '"Had a quick intro call. Elena is very sharp. She mentioned she\'s looking for a role with more autonomy and a focus on design systems. Highly recommend moving to technical round."', highlight: true },
-  { author: 'Sarah Miller', ago: '4 days ago', text: '"Verified her portfolio. The attention to detail in her UI components is exceptional. Clean code, very modular approach."', highlight: false },
-]
+function initials(name) {
+  return (name ?? '').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || '??'
+}
 
-export default function CandidateProfile({ onNavigate }) {
+function getScoreColors(score) {
+  const pct = Math.round((score ?? 0) * 100)
+  if (pct >= 75) return { text: 'text-tertiary', bg: 'bg-tertiary/10', bar: '#006b2b', label: 'Top Match' }
+  if (pct >= 50) return { text: 'text-yellow-600', bg: 'bg-yellow-100', bar: '#ca8a04', label: 'Good Match' }
+  return { text: 'text-error', bg: 'bg-error-container', bar: '#ba1a1a', label: 'Low Match' }
+}
+
+function ShapBar({ label, value }) {
+  const abs = Math.abs(value)
+  const width = Math.min((abs / 0.3) * 100, 100)
+  const positive = value >= 0
+  return (
+    <div className="flex items-center gap-3 text-xs">
+      <span className="w-36 text-on-surface-variant font-medium truncate">{label}</span>
+      <div className="flex-1 h-2 bg-surface-container rounded-full overflow-hidden">
+        <div className={`h-full rounded-full ${positive ? 'bg-tertiary' : 'bg-error'}`} style={{ width: `${width}%` }} />
+      </div>
+      <span className={`w-12 text-right font-bold ${positive ? 'text-tertiary' : 'text-error'}`}>
+        {positive ? '+' : ''}{value.toFixed(2)}
+      </span>
+    </div>
+  )
+}
+
+export default function CandidateProfile({ onNavigate, candidateId }) {
+  const [candidate, setCandidate] = useState(null)
+  const [loading, setLoading]     = useState(true)
+  const [error, setError]         = useState(null)
+  const [updating, setUpdating]   = useState(false)
+
+  useEffect(() => {
+    if (!candidateId) { setError('Candidat non spécifié'); setLoading(false); return }
+    getCandidate(candidateId)
+      .then(setCandidate)
+      .catch(() => setError('Candidat introuvable'))
+      .finally(() => setLoading(false))
+  }, [candidateId])
+
+  const handleStatus = async (newStatus) => {
+    if (!candidate || updating) return
+    setUpdating(true)
+    try {
+      await updateStatus(candidate.candidate_id, newStatus)
+      setCandidate(prev => ({ ...prev, status: newStatus }))
+    } catch (_) {}
+    finally { setUpdating(false) }
+  }
+
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-[60vh] text-on-surface-variant gap-3">
+      <Icon name="hourglass_empty" size={32} />
+      <span className="font-medium">Chargement...</span>
+    </div>
+  )
+
+  if (error || !candidate) return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-on-surface-variant">
+      <Icon name="person_off" size={48} />
+      <p className="font-bold text-on-surface">{error ?? 'Candidat introuvable'}</p>
+      <button onClick={() => onNavigate('candidates')} className="text-primary font-bold text-sm hover:underline">
+        Retour à la liste
+      </button>
+    </div>
+  )
+
+  const pct    = Math.round((candidate.score ?? 0) * 100)
+  const colors = getScoreColors(candidate.score)
+  const ini    = initials(candidate.name)
+  const date   = candidate.received_at
+    ? new Date(candidate.received_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+    : '—'
+
+  const decisionLabel = { invite: 'Invité', reject: 'Rejeté', eliminated: 'Éliminé' }[candidate.decision] ?? '—'
+  const decisionColor = { invite: 'text-tertiary', reject: 'text-error', eliminated: 'text-on-surface-variant' }[candidate.decision] ?? 'text-on-surface-variant'
+
+  let shapEntries = []
+  try {
+    if (candidate.shap_json) {
+      const shap = typeof candidate.shap_json === 'string' ? JSON.parse(candidate.shap_json) : candidate.shap_json
+      shapEntries = Object.entries(shap).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 6)
+    }
+  } catch (_) {}
+
+  const infoFields = [
+    { label: 'Email',           value: candidate.email },
+    { label: 'Téléphone',       value: candidate.phone },
+    { label: 'Secteur',         value: candidate.sector },
+    { label: 'Rôle cible',      value: candidate.target_role },
+    { label: 'Expérience',      value: candidate.years_experience != null ? `${candidate.years_experience} ans` : null },
+    { label: "Niveau d'études", value: candidate.education_level },
+    { label: 'Genre',           value: candidate.gender },
+    { label: 'Âge',             value: candidate.age != null ? `${candidate.age} ans` : null },
+    { label: 'Statut',          value: candidate.status },
+    { label: 'Reçu le',         value: date },
+  ].filter(f => f.value != null)
+
   return (
     <div className="p-10 max-w-7xl mx-auto">
       {/* Breadcrumb */}
       <div className="flex justify-between items-center mb-10">
-        <button
-          onClick={() => onNavigate('candidates')}
-          className="flex items-center gap-2 text-on-surface-variant hover:text-on-surface transition-colors text-sm font-medium"
-        >
+        <button onClick={() => onNavigate('candidates')}
+          className="flex items-center gap-2 text-on-surface-variant hover:text-on-surface transition-colors text-sm font-medium">
           <Icon name="arrow_back" size={18} />
-          Back to Senior Frontend Developer Candidates
+          Retour aux candidats
         </button>
         <div className="flex gap-4">
-          <button className="px-6 py-2.5 rounded-full bg-secondary-container text-on-secondary-container font-semibold text-sm hover:opacity-90 transition-all">
-            Archive
+          <button onClick={() => handleStatus('archived')} disabled={updating}
+            className="px-6 py-2.5 rounded-full bg-secondary-container text-on-secondary-container font-semibold text-sm hover:opacity-90 transition-all disabled:opacity-50">
+            Archiver
           </button>
-          <button className="px-8 py-2.5 rounded-full bg-gradient-to-r from-primary to-primary-container text-white font-bold text-sm shadow-lg shadow-primary/20 active:scale-95 transition-transform">
-            Move to Interview
-          </button>
+          {candidate.decision === 'invite' ? (
+            <button onClick={() => handleStatus('interview_scheduled')} disabled={updating}
+              className="px-8 py-2.5 rounded-full bg-gradient-to-r from-primary to-primary-container text-white font-bold text-sm shadow-lg shadow-primary/20 active:scale-95 transition-transform disabled:opacity-50">
+              Planifier l'entretien
+            </button>
+          ) : (
+            <div className={`px-8 py-2.5 rounded-full font-bold text-sm ${colors.bg} ${colors.text}`}>
+              {decisionLabel}
+            </div>
+          )}
         </div>
       </div>
 
       <div className="grid grid-cols-12 gap-8">
-        {/* Left Column */}
+        {/* Left */}
         <div className="col-span-4 space-y-6">
-          {/* Profile Summary */}
+          {/* Profile */}
           <section className="bg-surface-container-lowest rounded-2xl p-8 text-center shadow-ambient">
-            <div className="w-32 h-32 rounded-full mx-auto mb-6 bg-gradient-to-br from-primary/20 to-primary-container/20 flex items-center justify-center text-4xl font-black text-primary ring-4 ring-surface-container-low">
-              ER
+            <div className={`w-32 h-32 rounded-full mx-auto mb-6 ${AVATAR_COLORS[0]} flex items-center justify-center text-4xl font-black ring-4 ring-surface-container-low`}>
+              {ini}
             </div>
-            <h2 className="text-2xl font-extrabold tracking-tight text-on-surface">Elena Rodriguez</h2>
-            <p className="text-primary font-medium mb-6">Senior Frontend Engineer</p>
+            <h2 className="text-2xl font-extrabold tracking-tight text-on-surface">{candidate.name ?? 'Anonyme'}</h2>
+            <p className="text-primary font-medium">{candidate.target_role ?? candidate.sector ?? '—'}</p>
+            <p className={`text-sm font-bold mt-1 mb-6 ${decisionColor}`}>{decisionLabel}</p>
 
-            <div className="flex justify-center gap-3 mb-8 flex-wrap">
-              <span className="px-3 py-1 bg-surface-container rounded-full text-xs font-bold text-on-surface-variant">San Francisco, CA</span>
-              <span className="px-3 py-1 bg-surface-container rounded-full text-xs font-bold text-on-surface-variant">Remote Friendly</span>
+            <div className="flex justify-center gap-2 mb-6 flex-wrap">
+              {candidate.sector && <span className="px-3 py-1 bg-surface-container rounded-full text-xs font-bold text-on-surface-variant">{candidate.sector}</span>}
+              {candidate.years_experience != null && <span className="px-3 py-1 bg-surface-container rounded-full text-xs font-bold text-on-surface-variant">{candidate.years_experience} ans exp.</span>}
             </div>
 
-            <div className="space-y-2 text-left">
-              {[
-                { icon: 'mail', text: 'elena.rod@example.com' },
-                { icon: 'phone', text: '+1 (555) 012-3456' },
-                { icon: 'link', text: 'LinkedIn Profile', link: true },
-              ].map(({ icon, text, link }) => (
-                <div key={icon} className="flex items-center gap-3 p-3 rounded-lg hover:bg-surface-container-low transition-colors">
-                  <span className="text-primary"><Icon name={icon} size={20} /></span>
-                  {link ? <a href="#" className="text-sm text-primary font-bold hover:underline">{text}</a>
-                    : <span className="text-sm text-on-surface">{text}</span>}
+            <div className="space-y-1 text-left">
+              {candidate.email && (
+                <div className="flex items-center gap-3 p-3 rounded-lg hover:bg-surface-container-low transition-colors">
+                  <span className="text-primary"><Icon name="mail" size={18} /></span>
+                  <span className="text-sm text-on-surface truncate">{candidate.email}</span>
                 </div>
-              ))}
+              )}
+              {candidate.phone && (
+                <div className="flex items-center gap-3 p-3 rounded-lg hover:bg-surface-container-low transition-colors">
+                  <span className="text-primary"><Icon name="phone" size={18} /></span>
+                  <span className="text-sm text-on-surface">{candidate.phone}</span>
+                </div>
+              )}
+              <div className="flex items-center gap-3 p-3 rounded-lg">
+                <span className="text-primary"><Icon name="calendar_today" size={18} /></span>
+                <span className="text-sm text-on-surface">Reçu le {date}</span>
+              </div>
             </div>
-
-            <button className="w-full mt-8 flex items-center justify-center gap-2 p-4 bg-surface-container-high rounded-xl text-on-surface font-bold text-sm hover:bg-surface-container-highest transition-colors">
-              <Icon name="description" size={18} /> View Original Resume
-            </button>
           </section>
 
-          {/* Skills */}
+          {/* Score */}
           <section className="bg-surface-container-low rounded-2xl p-6 shadow-ambient">
-            <h3 className="text-sm font-black text-on-surface uppercase tracking-widest mb-4">Core Competencies</h3>
-            <div className="flex flex-wrap gap-2">
-              {SKILLS.map(s => (
-                <span key={s} className="px-3 py-1 bg-white text-primary text-xs font-bold rounded-lg border border-primary/10">{s}</span>
-              ))}
+            <h3 className="text-sm font-black text-on-surface uppercase tracking-widest mb-4">Score ML</h3>
+            <div className="flex items-center gap-4">
+              <div className="relative w-20 h-20 flex-shrink-0">
+                <svg className="w-full h-full -rotate-90" viewBox="0 0 80 80">
+                  <circle cx="40" cy="40" r="34" fill="none" stroke={`${colors.bar}33`} strokeWidth="6" />
+                  <circle cx="40" cy="40" r="34" fill="none" stroke={colors.bar} strokeWidth="6"
+                    strokeDasharray={`${2 * Math.PI * 34}`}
+                    strokeDashoffset={`${2 * Math.PI * 34 * (1 - pct / 100)}`}
+                    strokeLinecap="round" />
+                </svg>
+                <span className={`absolute inset-0 flex items-center justify-center text-lg font-black ${colors.text}`}>{pct}%</span>
+              </div>
+              <div>
+                <p className={`text-xl font-black ${colors.text}`}>{colors.label}</p>
+                <p className="text-xs text-on-surface-variant mt-1">Seuil : {Math.round((candidate.threshold_used ?? 0.5) * 100)}%</p>
+              </div>
             </div>
           </section>
         </div>
 
-        {/* Right Column */}
+        {/* Right */}
         <div className="col-span-8 space-y-8">
           {/* AI Insights */}
           <section className="bg-surface-container-lowest rounded-2xl p-8 ai-glow relative overflow-hidden shadow-ambient">
             <div className="absolute top-0 right-0 p-6">
-              <div className="flex items-center gap-2 bg-tertiary-container/10 px-4 py-2 rounded-full">
-                <span className="w-2 h-2 bg-tertiary rounded-full animate-pulse" />
-                <span className="text-tertiary font-black text-xs uppercase tracking-tighter">98 Match Score</span>
+              <div className={`flex items-center gap-2 ${colors.bg} px-4 py-2 rounded-full`}>
+                <span className={`w-2 h-2 rounded-full animate-pulse`} style={{ backgroundColor: colors.bar }} />
+                <span className={`${colors.text} font-black text-xs uppercase tracking-tighter`}>{pct}% Match</span>
               </div>
             </div>
-
-            <div className="flex items-center gap-3 mb-8">
+            <div className="flex items-center gap-3 mb-6">
               <span className="text-tertiary"><Icon name="auto_awesome" fill size={30} /></span>
-              <h3 className="text-xl font-extrabold text-on-surface">AI Insights & Suitability</h3>
+              <h3 className="text-xl font-extrabold text-on-surface">Analyse IA</h3>
             </div>
-
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-2 gap-4">
               <div className="p-5 bg-surface-container-low rounded-2xl">
-                <p className="text-xs font-bold text-tertiary uppercase mb-2">Key Strength</p>
-                <p className="text-sm text-on-surface font-medium leading-relaxed">Elena possesses deep expertise in React ecosystem. Her recent projects align perfectly with our current migration to Next.js 14.</p>
+                <p className="text-xs font-bold text-tertiary uppercase mb-2">Décision ML</p>
+                <p className={`text-lg font-bold ${decisionColor}`}>{decisionLabel}</p>
+                <p className="text-xs text-on-surface-variant mt-1">Score {pct}% vs seuil {Math.round((candidate.threshold_used ?? 0.5) * 100)}%</p>
               </div>
               <div className="p-5 bg-surface-container-low rounded-2xl">
-                <p className="text-xs font-bold text-tertiary uppercase mb-2">Pedigree</p>
-                <p className="text-sm text-on-surface font-medium leading-relaxed">Significant tenure at high-growth organizations (Google, Stripe) indicates strong engineering discipline and scale experience.</p>
+                <p className="text-xs font-bold text-tertiary uppercase mb-2">Expérience</p>
+                <p className="text-lg font-bold text-on-surface">{candidate.years_experience != null ? `${candidate.years_experience} ans` : '—'}</p>
+                <p className="text-xs text-on-surface-variant mt-1">{candidate.sector ?? '—'}</p>
               </div>
-              <div className="p-5 bg-surface-container-low rounded-2xl col-span-2">
-                <p className="text-xs font-bold text-tertiary uppercase mb-2">Technical Verdict</p>
-                <p className="text-sm text-on-surface font-medium leading-relaxed">Candidate demonstrates "Product-Minded" engineering. Analysis of her GitHub contributions shows a heavy focus on accessibility (a11y) and performance optimization, which are critical for our Q4 roadmap.</p>
-              </div>
-            </div>
-          </section>
-
-          {/* Work History */}
-          <section className="bg-surface-container-lowest rounded-2xl p-8 shadow-ambient">
-            <h3 className="text-xl font-extrabold text-on-surface mb-8">Work History</h3>
-            <div className="space-y-10 relative before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[2px] before:bg-surface-container">
-              {WORK_HISTORY.map((w, i) => (
-                <div key={i} className="relative pl-12">
-                  <div className={`absolute left-0 top-1 w-6 h-6 rounded-full flex items-center justify-center ring-4 ring-white
-                    ${w.active ? 'bg-primary' : 'bg-surface-container-highest'}`}>
-                    <span className="w-2 h-2 bg-white rounded-full" />
-                  </div>
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <h4 className="text-lg font-bold text-on-surface">{w.title}</h4>
-                      <p className="text-sm font-medium text-primary">{w.company} • {w.period}</p>
-                    </div>
-                    <span className="text-[10px] font-black text-slate-400 uppercase">{w.duration}</span>
-                  </div>
-                  <p className="text-sm text-on-surface-variant leading-relaxed">{w.desc}</p>
+              {candidate.eliminated_reason && (
+                <div className="p-5 bg-error-container rounded-2xl col-span-2">
+                  <p className="text-xs font-bold text-error uppercase mb-2">Raison d'élimination</p>
+                  <p className="text-sm text-on-surface font-medium">{candidate.eliminated_reason}</p>
                 </div>
-              ))}
+              )}
+              {shapEntries.length > 0 && (
+                <div className="p-5 bg-surface-container-low rounded-2xl col-span-2">
+                  <p className="text-xs font-bold text-tertiary uppercase mb-4">Facteurs SHAP (impact sur le score)</p>
+                  <div className="space-y-3">
+                    {shapEntries.map(([k, v]) => <ShapBar key={k} label={k} value={v} />)}
+                  </div>
+                </div>
+              )}
             </div>
           </section>
 
-          {/* Internal Notes */}
+          {/* Infos détaillées */}
           <section className="bg-surface-container-lowest rounded-2xl p-8 shadow-ambient">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-extrabold text-on-surface">Internal Notes</h3>
-              <button className="flex items-center gap-2 text-primary font-bold text-sm hover:opacity-80">
-                <Icon name="add" size={18} /> Add Note
-              </button>
-            </div>
-            <div className="space-y-4">
-              {NOTES.map((n, i) => (
-                <div key={i} className={`p-6 bg-surface-container-low rounded-2xl border-l-4 ${n.highlight ? 'border-primary' : 'border-outline-variant/30'}`}>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-black text-on-surface">{n.author}</span>
-                      <span className="text-[10px] text-on-surface-variant">• {n.ago}</span>
-                    </div>
-                    <Icon name="more_horiz" size={18} className="text-outline" />
-                  </div>
-                  <p className="text-sm text-on-surface-variant italic leading-relaxed">{n.text}</p>
+            <h3 className="text-xl font-extrabold text-on-surface mb-6">Informations du candidat</h3>
+            <div className="grid grid-cols-2 gap-3">
+              {infoFields.map(({ label, value }) => (
+                <div key={label} className="p-4 bg-surface-container-low rounded-xl">
+                  <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">{label}</p>
+                  <p className="text-sm font-semibold text-on-surface">{String(value)}</p>
                 </div>
               ))}
             </div>
