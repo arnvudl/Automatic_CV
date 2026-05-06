@@ -9,11 +9,10 @@ api/.env
 data/raw/
 data/processed/
 models/
-reports/plots
-reports/audit.txt
-reports/evaluation.txt
 .idea/
 .vscode/
 .DS_Store
 Thumbs.db
 .claude
+frontend/.vite
+reports
