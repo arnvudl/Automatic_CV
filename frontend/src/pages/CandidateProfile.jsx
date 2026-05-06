@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Icon } from '../components/Icon'
 import { getCandidate, updateStatus } from '../lib/api'
+import { Toast } from '../components/Toast'
 
 const AVATAR_COLORS = [
   'bg-blue-100 text-primary',
@@ -43,6 +44,11 @@ export default function CandidateProfile({ onNavigate, candidateId }) {
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState(null)
   const [updating, setUpdating]   = useState(false)
+  const [toast, setToast]         = useState(null)
+
+  const showToast = useCallback((message, type = 'success') => {
+    setToast({ message, type })
+  }, [])
 
   useEffect(() => {
     if (!candidateId) { setError('Candidat non spécifié'); setLoading(false); return }
@@ -58,7 +64,17 @@ export default function CandidateProfile({ onNavigate, candidateId }) {
     try {
       await updateStatus(candidate.candidate_id, newStatus)
       setCandidate(prev => ({ ...prev, status: newStatus }))
-    } catch (_) {}
+      const messages = {
+        archived:             'Candidat archivé',
+        interview_scheduled:  'Entretien planifié ✓',
+        review:               'Mis en révision',
+        rejected:             'Candidat rejeté',
+        inbox:                'Remis en boîte de réception',
+      }
+      showToast(messages[newStatus] ?? 'Statut mis à jour')
+    } catch (e) {
+      showToast('Erreur lors de la mise à jour', 'error')
+    }
     finally { setUpdating(false) }
   }
 
@@ -112,6 +128,7 @@ export default function CandidateProfile({ onNavigate, candidateId }) {
 
   return (
     <div className="p-10 max-w-7xl mx-auto">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       {/* Breadcrumb */}
       <div className="flex justify-between items-center mb-10">
         <button onClick={() => onNavigate('candidates')}
@@ -119,15 +136,27 @@ export default function CandidateProfile({ onNavigate, candidateId }) {
           <Icon name="arrow_back" size={18} />
           Retour aux candidats
         </button>
-        <div className="flex gap-4">
-          <button onClick={() => handleStatus('archived')} disabled={updating}
-            className="px-6 py-2.5 rounded-full bg-secondary-container text-on-secondary-container font-semibold text-sm hover:opacity-90 transition-all disabled:opacity-50">
-            Archiver
-          </button>
-          {candidate.decision === 'invite' ? (
+        <div className="flex gap-3 flex-wrap">
+          {candidate.status === 'archived' ? (
+            <button onClick={() => handleStatus('inbox')} disabled={updating}
+              className="px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface font-semibold text-sm hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2">
+              <Icon name="unarchive" size={16} /> Désarchiver
+            </button>
+          ) : (
+            <button onClick={() => handleStatus('archived')} disabled={updating}
+              className="px-6 py-2.5 rounded-full bg-secondary-container text-on-secondary-container font-semibold text-sm hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2">
+              <Icon name="archive" size={16} /> Archiver
+            </button>
+          )}
+
+          {candidate.status === 'interview_scheduled' ? (
+            <div className="px-8 py-2.5 rounded-full bg-tertiary/10 text-tertiary font-bold text-sm flex items-center gap-2">
+              <Icon name="event_available" size={16} /> Entretien planifié ✓
+            </div>
+          ) : candidate.decision === 'invite' ? (
             <button onClick={() => handleStatus('interview_scheduled')} disabled={updating}
-              className="px-8 py-2.5 rounded-full bg-gradient-to-r from-primary to-primary-container text-white font-bold text-sm shadow-lg shadow-primary/20 active:scale-95 transition-transform disabled:opacity-50">
-              Planifier l'entretien
+              className="px-8 py-2.5 rounded-full bg-gradient-to-r from-primary to-primary-container text-white font-bold text-sm shadow-lg shadow-primary/20 active:scale-95 transition-transform disabled:opacity-50 flex items-center gap-2">
+              <Icon name="event" size={16} /> Planifier l'entretien
             </button>
           ) : (
             <div className={`px-8 py-2.5 rounded-full font-bold text-sm ${colors.bg} ${colors.text}`}>

@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { Icon } from './Icon'
+import { getCandidates } from '../lib/api'
 
 const HELP_ARTICLES = [
   { title: 'Comment envoyer un CV par email ?', desc: 'Envoyez un CV à 73cn1.test@inbox.testmail.app' },
@@ -9,8 +10,24 @@ const HELP_ARTICLES = [
 ]
 
 export default function TopNav({ onNavigate }) {
-  const [showNotif, setShowNotif]   = useState(false)
-  const [showHelp,  setShowHelp]    = useState(false)
+  const [showNotif, setShowNotif]     = useState(false)
+  const [showHelp,  setShowHelp]      = useState(false)
+  const [searchQ,   setSearchQ]       = useState('')
+  const [searchRes, setSearchRes]     = useState([])
+  const [searching, setSearching]     = useState(false)
+  const [showSearch, setShowSearch]   = useState(false)
+
+  const handleSearch = useCallback(async (val) => {
+    setSearchQ(val)
+    if (!val.trim()) { setSearchRes([]); setShowSearch(false); return }
+    setSearching(true)
+    setShowSearch(true)
+    try {
+      const res = await getCandidates({ q: val, limit: 5 })
+      setSearchRes(res)
+    } catch (_) { setSearchRes([]) }
+    finally { setSearching(false) }
+  }, [])
 
   return (
     <header className="bg-surface/80 backdrop-blur-xl sticky top-0 z-40 flex justify-between items-center w-full px-8 py-3">
@@ -21,9 +38,38 @@ export default function TopNav({ onNavigate }) {
             <Icon name="search" size={18} />
           </span>
           <input
+            value={searchQ}
+            onChange={e => handleSearch(e.target.value)}
+            onBlur={() => setTimeout(() => setShowSearch(false), 200)}
+            onFocus={() => searchQ && setShowSearch(true)}
             className="w-full bg-surface-container-high border-none rounded-xl py-2 pl-10 pr-4 text-sm outline-none focus:ring-2 focus:ring-primary/30 transition-all"
             placeholder="Rechercher candidats, offres..."
           />
+          {showSearch && (
+            <div className="absolute top-12 left-0 right-0 bg-surface-container-lowest rounded-2xl shadow-ambient-lg z-50 overflow-hidden">
+              {searching ? (
+                <div className="px-5 py-4 text-sm text-on-surface-variant">Recherche...</div>
+              ) : searchRes.length === 0 ? (
+                <div className="px-5 py-4 text-sm text-on-surface-variant">Aucun résultat</div>
+              ) : (
+                <div className="divide-y divide-outline-variant/10">
+                  {searchRes.map(c => (
+                    <button key={c.candidate_id}
+                      onMouseDown={() => { onNavigate('profile', c.candidate_id); setSearchQ(''); setShowSearch(false) }}
+                      className="w-full text-left px-5 py-3 hover:bg-surface-container-low transition-colors flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
+                        {(c.name ?? '??').split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-on-surface">{c.name ?? 'Anonyme'}</p>
+                        <p className="text-xs text-on-surface-variant">{c.sector ?? '—'} · {Math.round((c.score ?? 0) * 100)}%</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

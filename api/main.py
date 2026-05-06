@@ -448,20 +448,30 @@ def list_candidates(
     status:    Optional[str] = Query(None, description="inbox | review | interview | rejected"),
     min_score: float         = Query(0.0),
     limit:     int           = Query(200),
+    q:         Optional[str] = Query(None, description="recherche nom / email / rôle"),
 ):
     """Retourne la liste des candidats scorés (DB en priorité, CSV en fallback)."""
     from sqlalchemy import desc as _desc
     try:
         with get_db() as db:
-            q = db.query(CandidateModel)
+            from sqlalchemy import or_
+            query_db = db.query(CandidateModel)
             if decision:
-                q = q.filter(CandidateModel.decision == decision)
+                query_db = query_db.filter(CandidateModel.decision == decision)
             if sector:
-                q = q.filter(CandidateModel.sector.ilike(sector))
+                query_db = query_db.filter(CandidateModel.sector.ilike(sector))
             if status:
-                q = q.filter(CandidateModel.status == status)
-            q = q.filter(CandidateModel.score >= min_score)
-            rows = q.order_by(_desc(CandidateModel.score)).limit(limit).all()
+                query_db = query_db.filter(CandidateModel.status == status)
+            if q:
+                like = f"%{q}%"
+                query_db = query_db.filter(or_(
+                    CandidateModel.name.ilike(like),
+                    CandidateModel.email.ilike(like),
+                    CandidateModel.target_role.ilike(like),
+                    CandidateModel.sector.ilike(like),
+                ))
+            query_db = query_db.filter(CandidateModel.score >= min_score)
+            rows = query_db.order_by(_desc(CandidateModel.score)).limit(limit).all()
             if rows:
                 return [
                     {c.name: getattr(r, c.name) for c in r.__table__.columns}
