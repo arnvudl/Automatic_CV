@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { Icon } from './Icon'
 import { getCandidates } from '../lib/api'
+import { useAuth } from '../contexts/AuthContext'
 
 const HELP_ARTICLES = [
   { title: 'Comment envoyer un CV par email ?', desc: 'Envoyez un CV à 73cn1.test@inbox.testmail.app' },
@@ -10,6 +11,7 @@ const HELP_ARTICLES = [
 ]
 
 export default function TopNav({ onNavigate }) {
+  const { user } = useAuth()
   const [showNotif, setShowNotif]     = useState(false)
   const [showHelp,  setShowHelp]      = useState(false)
   const [searchQ,   setSearchQ]       = useState('')
@@ -133,8 +135,9 @@ export default function TopNav({ onNavigate }) {
         </button>
 
         <button onClick={() => onNavigate('settings')}
-          className="w-9 h-9 rounded-full bg-secondary-container flex items-center justify-center text-primary font-bold text-sm border-2 border-white shadow-sm select-none hover:opacity-80 transition-opacity">
-          HR
+          className="w-9 h-9 rounded-full bg-secondary-container flex items-center justify-center text-primary font-bold text-sm border-2 border-white shadow-sm select-none hover:opacity-80 transition-opacity"
+          title={user?.name ?? 'Profil'}>
+          {(user?.name ?? 'HR').split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase()}
         </button>
       </div>
     </header>

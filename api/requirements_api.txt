@@ -11,3 +11,6 @@ sqlalchemy>=2.0
 psycopg2-binary    # PostgreSQL driver
 python-dotenv
 groq
+# Auth
+PyJWT>=2.8.0
+passlib[bcrypt]>=1.7.4

@@ -7,12 +7,13 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 
+from api.auth import get_current_user
 from api.database import get_db, Job as JobModel
 
-router = APIRouter(tags=["jobs"])
+router = APIRouter(tags=["jobs"], dependencies=[Depends(get_current_user)])
 logger = logging.getLogger("cv_api")
 
 # ── Helpers ──────────────────────────────────────────────────────────

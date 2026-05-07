@@ -1,4 +1,5 @@
 import { Icon } from './Icon'
+import { useAuth } from '../contexts/AuthContext'
 
 const NAV_ITEMS = [
   { id: 'dashboard',  label: 'Tableau de bord', icon: 'dashboard' },
@@ -10,6 +11,7 @@ const NAV_ITEMS = [
 ]
 
 export default function Sidebar({ active, onNavigate }) {
+  const { logout, user } = useAuth()
   return (
     <aside className="h-screen w-64 fixed left-0 top-0 z-50 bg-surface-container-low flex flex-col p-6 space-y-8">
       {/* Logo */}
@@ -50,7 +52,15 @@ export default function Sidebar({ active, onNavigate }) {
           <Icon name="help" size={20} />
           <span>Centre d'aide</span>
         </a>
-        <button onClick={() => onNavigate('settings')}
+        {user && (
+          <div className="flex items-center gap-3 px-4 py-2 text-slate-600 text-sm">
+            <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">
+              {(user.name ?? 'U').split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase()}
+            </div>
+            <span className="font-medium truncate">{user.name ?? user.email}</span>
+          </div>
+        )}
+        <button onClick={logout}
           className="flex items-center gap-3 px-4 py-2 text-slate-600 hover:text-error transition-all text-sm">
           <Icon name="logout" size={20} />
           <span>Déconnexion</span>

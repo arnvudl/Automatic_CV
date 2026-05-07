@@ -8,12 +8,13 @@ from typing import Optional
 
 import pandas as pd
 from datetime import datetime
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
 
+from api.auth import get_current_user
 from api.config import CANDIDATES_FILE, FEATURE_LABELS
 from api.database import get_db, Candidate as CandidateModel
 
-router = APIRouter(tags=["stats"])
+router = APIRouter(tags=["stats"], dependencies=[Depends(get_current_user)])
 logger = logging.getLogger("cv_api")
 
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Icon } from '../components/Icon'
-import { getCandidate, updateStatus } from '../lib/api'
+import { getCandidate, updateStatus, createInterview } from '../lib/api'
 import { Toast } from '../components/Toast'
 import { InterviewModal } from '../components/InterviewModal'
 
@@ -138,6 +138,13 @@ export default function CandidateProfile({ onNavigate, candidateId }) {
           onConfirm={async ({ date, time, type, notes }) => {
             setShowInterview(false)
             await handleStatus('interview_scheduled')
+            try {
+              await createInterview({
+                candidate_id:   candidate.candidate_id,
+                candidate_name: candidate.name,
+                date, time, type, notes,
+              })
+            } catch (_) { /* non bloquant */ }
             showToast(`Entretien ${type} planifié le ${new Date(date).toLocaleDateString('fr-FR')} à ${time}`)
           }}
         />
@@ -199,16 +206,20 @@ export default function CandidateProfile({ onNavigate, candidateId }) {
 
             <div className="space-y-1 text-left">
               {candidate.email && (
-                <div className="flex items-center gap-3 p-3 rounded-lg hover:bg-surface-container-low transition-colors">
+                <a href={`mailto:${candidate.email}?subject=${encodeURIComponent(`Candidature${candidate.target_role ? ' — ' + candidate.target_role : ''} | Luminary ATS`)}&body=${encodeURIComponent(`Bonjour ${candidate.name ?? ''},\n\nNous avons étudié votre candidature avec attention.\n\nCordialement,\nL'équipe RH`)}`}
+                  className="flex items-center gap-3 p-3 rounded-lg hover:bg-surface-container-low transition-colors group">
                   <span className="text-primary"><Icon name="mail" size={18} /></span>
-                  <span className="text-sm text-on-surface truncate">{candidate.email}</span>
-                </div>
+                  <span className="text-sm text-on-surface truncate flex-1">{candidate.email}</span>
+                  <span className="text-[10px] font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity">Contacter →</span>
+                </a>
               )}
               {candidate.phone && (
-                <div className="flex items-center gap-3 p-3 rounded-lg hover:bg-surface-container-low transition-colors">
+                <a href={`tel:${candidate.phone}`}
+                  className="flex items-center gap-3 p-3 rounded-lg hover:bg-surface-container-low transition-colors group">
                   <span className="text-primary"><Icon name="phone" size={18} /></span>
-                  <span className="text-sm text-on-surface">{candidate.phone}</span>
-                </div>
+                  <span className="text-sm text-on-surface flex-1">{candidate.phone}</span>
+                  <span className="text-[10px] font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity">Appeler →</span>
+                </a>
               )}
               <div className="flex items-center gap-3 p-3 rounded-lg">
                 <span className="text-primary"><Icon name="calendar_today" size={18} /></span>

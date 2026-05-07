@@ -6,12 +6,13 @@ import json
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 
+from api.auth import get_current_user
 from api.config import COMMENTS_FILE
 
-router = APIRouter(tags=["comments"])
+router = APIRouter(tags=["comments"], dependencies=[Depends(get_current_user)])
 
 
 def _load() -> dict:

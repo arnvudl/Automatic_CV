@@ -1,10 +1,12 @@
 """
 main.py — Point d'entrée FastAPI (app, CORS, SSE, scoring).
-La logique métier est dans api/routers/ et api/scoring.py.
+Routes non protégées : /, /events, /score, /api/v1/candidates (n8n)
+Tout le reste → JWT requis (via dépendances router)
 """
 
 import asyncio
 import logging
+import os
 import uuid
 from datetime import datetime
 
@@ -13,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 from api.config import PROCESSED_DIR, RAW_TEXTS_DIR
-from api.database import init_db
+from api.database import init_db, get_db, User as UserModel
 from api.sse import _sse_clients, broadcast
 from api.scoring import (
     model as _model,
@@ -21,7 +23,10 @@ from api.scoring import (
     enrich_features,
     save_candidate,
 )
+from api.auth import hash_password
 from api.routers import candidates, jobs, stats, comments
+from api.routers import auth as auth_router
+from api.routers import interviews as interviews_router
 
 # Parsing pipeline
 from pipeline_ml.core.p01_parse import parse_cv, parse_cv_llm
@@ -30,7 +35,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("cv_api")
 
 # ── App ──────────────────────────────────────────────────────────────
-app = FastAPI(title="CV-Intelligence API", version="2.0.0", docs_url="/docs")
+app = FastAPI(title="CV-Intelligence API", version="2.1.0", docs_url="/docs")
 
 app.add_middleware(
     CORSMiddleware,
@@ -44,17 +49,41 @@ app.add_middleware(
 )
 
 # ── Routers ──────────────────────────────────────────────────────────
-app.include_router(candidates.router)
-app.include_router(jobs.router)
-app.include_router(stats.router)
-app.include_router(comments.router)
+app.include_router(auth_router.router)          # /auth/* — non protégé par défaut
+app.include_router(candidates.router)           # /candidates/* — protégé via router deps
+app.include_router(jobs.router)                 # /jobs/* — protégé
+app.include_router(stats.router)                # /stats, /analyse/* — protégé
+app.include_router(comments.router)             # /comments/* — protégé
+app.include_router(interviews_router.router)    # /interviews/* — protégé
 
 
 # ── Startup ──────────────────────────────────────────────────────────
 @app.on_event("startup")
 def startup():
     init_db()
+    _seed_admin()
     logger.info("Base de données initialisée.")
+
+
+def _seed_admin():
+    """Crée l'utilisateur admin depuis les variables d'env si aucun user n'existe."""
+    admin_email    = os.getenv("ADMIN_EMAIL",    "admin@lony.app")
+    admin_password = os.getenv("ADMIN_PASSWORD", "Luminary2025!")
+    admin_name     = os.getenv("ADMIN_NAME",     "Admin RH")
+    try:
+        with get_db() as db:
+            if db.query(UserModel).count() == 0:
+                admin = UserModel(
+                    user_id=uuid.uuid4().hex,
+                    email=admin_email,
+                    name=admin_name,
+                    password_hash=hash_password(admin_password),
+                    role="admin",
+                )
+                db.add(admin)
+                logger.info(f"Admin créé : {admin_email}")
+    except Exception as e:
+        logger.warning(f"Seed admin failed: {e}")
 
 
 # ── Status ───────────────────────────────────────────────────────────
@@ -63,15 +92,15 @@ def root():
     return {
         "status":       "online",
         "model_loaded": _model is not None,
-        "version":      "2.0.0",
-        "endpoints":    ["/score", "/candidates", "/jobs", "/stats", "/docs"],
+        "version":      "2.1.0",
+        "endpoints":    ["/score", "/candidates", "/jobs", "/stats", "/interviews", "/auth/login", "/docs"],
     }
 
 
 # ── SSE ───────────────────────────────────────────────────────────────
 @app.get("/events", tags=["realtime"])
 async def sse_stream():
-    """Server-Sent Events — le dashboard React s'y connecte."""
+    """Server-Sent Events — non protégé (EventSource n'envoie pas de headers custom)."""
     queue: asyncio.Queue = asyncio.Queue(maxsize=50)
     _sse_clients.add(queue)
 
@@ -98,7 +127,7 @@ async def sse_stream():
 # ── POST /score ───────────────────────────────────────────────────────
 @app.post("/score", tags=["scoring"])
 async def score_cv(file: UploadFile = File(...)):
-    """Reçoit un fichier .txt (CV), retourne le score ML et la décision."""
+    """Reçoit un fichier .txt (CV), retourne le score ML. Non protégé (n8n)."""
     if _model is None:
         raise HTTPException(503, "Modèle non disponible.")
 
@@ -108,7 +137,6 @@ async def score_cv(file: UploadFile = File(...)):
     except UnicodeDecodeError:
         text = content.decode("latin-1")
 
-    # Parsing LLM → fallback regex
     try:
         id_row, feat_row = parse_cv_llm(text, filename=file.filename or "")
         logger.info(f"Parsing LLM OK — {id_row.get('name')}")

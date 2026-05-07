@@ -112,6 +112,34 @@ class Job(Base):
     updated_at   = Column(DateTime, nullable=True)
 
 
+# ── Modèle User ──────────────────────────────────────────────────────
+class User(Base):
+    __tablename__ = "users"
+
+    user_id       = Column(String(64),  primary_key=True, default=lambda: uuid.uuid4().hex)
+    email         = Column(String(255), unique=True, nullable=False, index=True)
+    name          = Column(String(255), nullable=False)
+    password_hash = Column(String(255), nullable=False)
+    role          = Column(String(32),  default="recruiter")  # admin | recruiter
+    is_active     = Column(Boolean,     default=True)
+    created_at    = Column(DateTime,    default=datetime.utcnow)
+
+
+# ── Modèle Interview ─────────────────────────────────────────────────
+class Interview(Base):
+    __tablename__ = "interviews"
+
+    interview_id   = Column(String(64),  primary_key=True, default=lambda: uuid.uuid4().hex)
+    candidate_id   = Column(String(64),  nullable=False, index=True)
+    candidate_name = Column(String(255), nullable=True)
+    date           = Column(String(16),  nullable=False, index=True)  # YYYY-MM-DD
+    time           = Column(String(8),   nullable=True)               # HH:MM
+    interview_type = Column(String(128), nullable=True)
+    notes          = Column(Text,        nullable=True)
+    created_at     = Column(DateTime,    default=datetime.utcnow)
+    updated_at     = Column(DateTime,    nullable=True)
+
+
 def init_db():
     """Crée les tables si elles n'existent pas encore."""
     Base.metadata.create_all(bind=engine)

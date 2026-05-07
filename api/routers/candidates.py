@@ -12,12 +12,13 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import or_, desc as _desc
 
+from api.auth import get_current_user
 from api.config import CANDIDATES_FILE, RAW_DIR, RAW_TEXTS_DIR, FEATURE_LABELS
 from api.database import get_db, Candidate as CandidateModel
 from api.sse import broadcast
 from api.scoring import groq_client, GROQ_MODEL
 
-router = APIRouter(tags=["candidates"])
+router = APIRouter(tags=["candidates"], dependencies=[Depends(get_current_user)])
 logger = logging.getLogger("cv_api")
 
 # ── Regex parsing CV brut ────────────────────────────────────────────

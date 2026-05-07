@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useAuth } from './contexts/AuthContext'
 import Sidebar from './components/Sidebar'
 import TopNav from './components/TopNav'
 import Dashboard from './pages/Dashboard'
@@ -8,6 +9,8 @@ import CandidateProfile from './pages/CandidateProfile'
 import Calendar from './pages/Calendar'
 import Settings from './pages/Settings'
 import Archives from './pages/Archives'
+import LoginPage from './pages/LoginPage'
+import { Icon } from './components/Icon'
 
 // ── URL ↔ page mapping ───────────────────────────────────────────────
 const ROUTE_MAP = {
@@ -24,7 +27,7 @@ const PAGE_TO_PATH = {
   dashboard:  '/dashboard',
   jobs:       '/jobs',
   candidates: '/candidates',
-  profile:    '/candidates',   // profile garde l'URL /candidates
+  profile:    '/candidates',
   calendar:   '/calendar',
   settings:   '/settings',
   archives:   '/archives',
@@ -37,8 +40,16 @@ function getPageFromPath(path) {
 }
 
 export default function App() {
+  const { isAuth, loading, logout } = useAuth()
   const [page, setPage]               = useState(() => getPageFromPath(window.location.pathname))
   const [candidateId, setCandidateId] = useState(null)
+
+  // Écoute les événements de déconnexion forcée (token expiré)
+  useEffect(() => {
+    const handler = () => logout()
+    window.addEventListener('lony:logout', handler)
+    return () => window.removeEventListener('lony:logout', handler)
+  }, [logout])
 
   const navigate = (target, id = null) => {
     if (id) setCandidateId(id)
@@ -47,7 +58,7 @@ export default function App() {
     setPage(target)
   }
 
-  // Gérer le bouton retour du navigateur
+  // Bouton retour navigateur
   useEffect(() => {
     const handler = (e) => {
       const state = e.state
@@ -62,7 +73,7 @@ export default function App() {
     return () => window.removeEventListener('popstate', handler)
   }, [])
 
-  // Alt + flèches pour naviguer entre les pages
+  // Alt + flèches
   useEffect(() => {
     const handler = (e) => {
       if (!e.altKey) return
@@ -74,6 +85,23 @@ export default function App() {
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [page])
+
+  // Spinner pendant la vérification du token
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-surface flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4 text-on-surface-variant">
+          <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center text-white animate-pulse">
+            <Icon name="auto_awesome" fill size={24} />
+          </div>
+          <span className="text-sm font-medium">Chargement...</span>
+        </div>
+      </div>
+    )
+  }
+
+  // Page de connexion si non authentifié
+  if (!isAuth) return <LoginPage />
 
   const renderPage = () => {
     switch (page) {
