@@ -1,79 +1,36 @@
 """
-API CV-Intelligence — FastAPI
-Reçoit un CV texte, le score avec le modèle ML, retourne la décision.
-Endpoints consommés par N8N et la page RH.
+main.py — Point d'entrée FastAPI (app, CORS, SSE, scoring).
+La logique métier est dans api/routers/ et api/scoring.py.
 """
 
-import csv
-import json
-import os
-import uuid
-import joblib
-import logging
-import numpy as np
-import pandas as pd
-from datetime import datetime, date
-from pathlib import Path
-from typing import Optional, List
-
-# Charger .env depuis la racine du projet (deux niveaux au-dessus de api/)
-try:
-    from dotenv import load_dotenv
-    load_dotenv(Path(__file__).parent.parent / ".env")
-except ImportError:
-    pass  # python-dotenv non installé — variables d'env déjà définies dans le shell
-
 import asyncio
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query
+import logging
+import uuid
+from datetime import datetime
+
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, StreamingResponse
-from pydantic import BaseModel
+from fastapi.responses import StreamingResponse
 
-# ── Database ─────────────────────────────────────────────────────────
-from api.database import init_db, get_db, Candidate as CandidateModel, Job as JobModel
+from api.config import PROCESSED_DIR, RAW_TEXTS_DIR
+from api.database import init_db
+from api.sse import _sse_clients, broadcast
+from api.scoring import (
+    model as _model,
+    score_features,
+    enrich_features,
+    save_candidate,
+)
+from api.routers import candidates, jobs, stats, comments
 
-try:
-    from groq import Groq as _Groq
-    _groq_client = _Groq(api_key=os.getenv("GROQ_API_KEY", ""))
-except Exception:
-    _groq_client = None
-
-GROQ_MODEL = "llama-3.3-70b-versatile"
-
-# ── Imports pipeline ────────────────────────────────────────────
-import sys
-ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(ROOT))
+# Parsing pipeline
 from pipeline_ml.core.p01_parse import parse_cv, parse_cv_llm
 
-# ── Config ───────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("cv_api")
 
-MODELS_DIR      = ROOT / "models"
-PROCESSED_DIR   = ROOT / "data" / "processed"
-RAW_TEXTS_DIR   = PROCESSED_DIR / "raw_texts"   # CV texte brut par candidate_id
-CANDIDATES_FILE = PROCESSED_DIR / "candidates_live.csv"
-COMMENTS_FILE   = PROCESSED_DIR / "comments.json"
-CONFIG_DIR      = ROOT / "config"
-ELIMINATORY_FILE = CONFIG_DIR / "eliminatory_criteria.json"
-PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
-RAW_TEXTS_DIR.mkdir(parents=True, exist_ok=True)
-
-# ── Chargement modèle ────────────────────────────────────────────
-try:
-    _model     = joblib.load(MODELS_DIR / "model.pkl")
-    _scaler    = joblib.load(MODELS_DIR / "scaler.pkl")
-    _features  = joblib.load(MODELS_DIR / "feature_cols.pkl")
-    _threshold = joblib.load(MODELS_DIR / "threshold.pkl")
-    _thr_jr    = joblib.load(MODELS_DIR / "threshold_junior.pkl") if (MODELS_DIR / "threshold_junior.pkl").exists() else _threshold
-    logger.info("Modèle ML chargé.")
-except Exception as e:
-    logger.error(f"Impossible de charger le modèle : {e}")
-    _model = None
-
-# ── App ──────────────────────────────────────────────────────────
-app = FastAPI(title="CV-Intelligence API", version="1.0.0", docs_url="/docs")
+# ── App ──────────────────────────────────────────────────────────────
+app = FastAPI(title="CV-Intelligence API", version="2.0.0", docs_url="/docs")
 
 app.add_middleware(
     CORSMiddleware,
@@ -86,277 +43,64 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── SSE broadcast ────────────────────────────────────────────────
-_sse_clients: set[asyncio.Queue] = set()
-
-async def _broadcast(event: dict):
-    """Envoie un événement SSE à tous les clients connectés."""
-    dead = set()
-    for q in _sse_clients:
-        try:
-            q.put_nowait(event)
-        except asyncio.QueueFull:
-            dead.add(q)
-    _sse_clients.difference_update(dead)
+# ── Routers ──────────────────────────────────────────────────────────
+app.include_router(candidates.router)
+app.include_router(jobs.router)
+app.include_router(stats.router)
+app.include_router(comments.router)
 
 
+# ── Startup ──────────────────────────────────────────────────────────
 @app.on_event("startup")
 def startup():
     init_db()
     logger.info("Base de données initialisée.")
 
 
+# ── Status ───────────────────────────────────────────────────────────
+@app.get("/", tags=["status"])
+def root():
+    return {
+        "status":       "online",
+        "model_loaded": _model is not None,
+        "version":      "2.0.0",
+        "endpoints":    ["/score", "/candidates", "/jobs", "/stats", "/docs"],
+    }
+
+
+# ── SSE ───────────────────────────────────────────────────────────────
 @app.get("/events", tags=["realtime"])
 async def sse_stream():
-    """
-    Server-Sent Events — le dashboard React s'y connecte pour
-    recevoir les mises à jour en temps réel (nouveau candidat scoré, etc.)
-    """
+    """Server-Sent Events — le dashboard React s'y connecte."""
     queue: asyncio.Queue = asyncio.Queue(maxsize=50)
     _sse_clients.add(queue)
 
     async def generator():
         try:
-            # Ping initial pour confirmer la connexion
             yield "event: connected\ndata: {}\n\n"
             while True:
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=25)
-                    import json as _json
-                    yield f"event: {event['type']}\ndata: {_json.dumps(event['data'])}\n\n"
+                    import json
+                    yield f"event: {event['type']}\ndata: {json.dumps(event['data'])}\n\n"
                 except asyncio.TimeoutError:
-                    yield ": heartbeat\n\n"   # évite la coupure nginx/proxy
+                    yield ": heartbeat\n\n"
         finally:
             _sse_clients.discard(queue)
 
     return StreamingResponse(
         generator(),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        }
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
-# ── Helpers ──────────────────────────────────────────────────────
-
-def _check_eliminatory(feat_row: dict) -> Optional[str]:
-    """Vérifie les critères éliminatoires. Retourne la raison si éliminé, None sinon."""
-    if not ELIMINATORY_FILE.exists():
-        return None
-    try:
-        config = json.loads(ELIMINATORY_FILE.read_text(encoding="utf-8"))
-    except Exception:
-        return None
-    for rule in config.get("rules", []):
-        if not rule.get("enabled"):
-            continue
-        field = rule["field"]
-        op    = rule["operator"]
-        val   = rule["value"]
-        candidate_val = feat_row.get(field)
-        if candidate_val is None:
-            continue
-        try:
-            if op == "gte" and float(candidate_val) < float(val):
-                return rule["reason"]
-            if op == "in" and val and str(candidate_val) not in [str(v) for v in val]:
-                return rule["reason"]
-        except (TypeError, ValueError):
-            pass
-    return None
-
-
-def _priority_rank(score: float) -> int:
-    """Retourne le rang percentile (0-100) du score parmi tous les candidats existants."""
-    if not CANDIDATES_FILE.exists():
-        return 50
-    try:
-        df = pd.read_csv(CANDIDATES_FILE)
-        all_scores = pd.to_numeric(df["score"], errors="coerce").dropna().values
-        if len(all_scores) == 0:
-            return 50
-        return int(round(np.sum(all_scores < score) / len(all_scores) * 100))
-    except Exception:
-        return 50
-
-
-def _score_features(feat: dict, age: Optional[int]) -> dict:
-    """Applique le modèle ML sur un dict de features et retourne score + décision + SHAP."""
-    if _model is None:
-        return {"score": None, "decision": "no_model", "threshold_used": None,
-                "shap_json": "{}", "priority_rank": None, "eliminated_reason": None}
-
-    # Critères éliminatoires — avant le ML
-    elim = _check_eliminatory(feat)
-    if elim:
-        return {"score": 0.0, "decision": "eliminated", "threshold_used": None,
-                "shap_json": "{}", "priority_rank": 0, "eliminated_reason": elim}
-
-    row = {k: float(feat.get(k, 0) or 0) for k in _features}
-    X = np.array([[row[k] for k in _features]])
-    X_s = _scaler.transform(X)
-    score = float(_model.predict_proba(X_s)[0][1])
-
-    # SHAP individual
-    shap_dict = {}
-    try:
-        import shap as _shap
-        explainer = _shap.LinearExplainer(_model, X_s, feature_perturbation="interventional")
-        sv = explainer.shap_values(X_s)
-        raw = sv[0] if isinstance(sv, list) else sv[0]
-        shap_dict = {k: round(float(v), 4) for k, v in zip(_features, raw)}
-    except Exception:
-        pass
-
-    is_junior = (age is not None and age < 30)
-    thr = _thr_jr if is_junior else _threshold
-    decision = "invite" if score >= thr else "reject"
-
-    return {
-        "score":            round(score, 4),
-        "decision":         decision,
-        "threshold_used":   round(thr, 4),
-        "shap_json":        json.dumps(shap_dict),
-        "priority_rank":    _priority_rank(score),
-        "eliminated_reason": None,
-    }
-
-
-CANDIDATE_FIELDS = [
-    "candidate_id", "received_at", "source_filename", "name", "email", "phone",
-    "gender", "age", "sector", "target_role", "years_experience", "education_level",
-    "score", "decision", "threshold_used", "status", "shap_json",
-    "priority_rank", "eliminated_reason",
-]
-
-def _save_candidate(record: dict):
-    """
-    Persiste un candidat :
-    1. PostgreSQL / SQLite via SQLAlchemy (source de vérité)
-    2. CSV legacy en parallèle (rétrocompatibilité pipeline ML)
-    """
-    # ── DB ────────────────────────────────────────────────
-    try:
-        with get_db() as db:
-            existing = db.get(CandidateModel, record["candidate_id"])
-            if existing:
-                # Mise à jour si re-soumission du même CV
-                for k, v in record.items():
-                    if hasattr(existing, k):
-                        setattr(existing, k, v)
-            else:
-                received = record.get("received_at")
-                if isinstance(received, str):
-                    try:
-                        received = datetime.fromisoformat(received)
-                    except ValueError:
-                        received = datetime.utcnow()
-                obj = CandidateModel(
-                    candidate_id=record["candidate_id"],
-                    received_at=received,
-                    source_filename=record.get("source_filename"),
-                    name=record.get("name"),
-                    email=record.get("email"),
-                    phone=record.get("phone"),
-                    gender=record.get("gender"),
-                    age=record.get("age"),
-                    sector=record.get("sector"),
-                    target_role=record.get("target_role"),
-                    years_experience=record.get("years_experience"),
-                    education_level=record.get("education_level"),
-                    score=record.get("score"),
-                    decision=record.get("decision"),
-                    threshold_used=record.get("threshold_used"),
-                    priority_rank=record.get("priority_rank"),
-                    eliminated_reason=record.get("eliminated_reason"),
-                    shap_json=record.get("shap_json"),
-                    status=record.get("status", "inbox"),
-                )
-                db.add(obj)
-    except Exception as db_err:
-        logger.warning(f"DB write failed ({db_err}) — CSV fallback only")
-
-    # ── CSV fallback ──────────────────────────────────────
-    fieldnames = CANDIDATE_FIELDS
-    exists = CANDIDATES_FILE.exists()
-    try:
-        with CANDIDATES_FILE.open("a", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
-            if not exists:
-                writer.writeheader()
-            writer.writerow(record)
-    except Exception as csv_err:
-        logger.warning(f"CSV write failed: {csv_err}")
-
-
-IT_KW      = {"computer","software","data","information","it","computing","engineering","technology","networks","ai"}
-FINANCE_KW = {"finance","accounting","economics","business","management","audit","banking"}
-
-def _enrich_features(feat_row: dict, age: Optional[int] = None) -> dict:
-    """Feature engineering v3 pour l'inférence live (miroir de p02_features)."""
-    years   = float(feat_row.get("years_experience") or 0)
-    avg_dur = float(feat_row.get("avg_job_duration") or 0)
-    nb_jobs = max(float(feat_row.get("nb_jobs") or 1), 1)
-    nb_tech = float(feat_row.get("nb_technical_skills") or 0)
-    nb_meth = float(feat_row.get("nb_methods_skills") or 0)
-    nb_cert = float(feat_row.get("nb_certifications") or 0)
-    nb_lang = float(feat_row.get("nb_languages") or 0)
-    eng_lvl = float(feat_row.get("english_level") or 0)
-    sector  = feat_row.get("sector", "Other")
-    edu_field = str(feat_row.get("education_field") or "").lower()
-
-    feat_row["log_years_exp"]          = round(np.log1p(years), 3)
-    feat_row["log_avg_job_duration"]   = round(np.log1p(avg_dur), 3)
-    feat_row["has_multiple_languages"] = int(nb_lang >= 2)
-    potential = round((nb_tech + nb_meth + nb_cert) / (years + 1), 3)
-    feat_row["potential_score"]        = potential
-    feat_row["junior_potential"]       = round(int(years < 3) * potential, 3)
-    feat_row["cert_density"]           = round(nb_cert / nb_jobs, 3)
-    feat_row["multilingual_score"]     = int(nb_lang + int(eng_lvl >= 4))
-    feat_row["method_tech_ratio"]      = round(nb_meth / max(nb_tech, 1), 3)
-    feat_row["tech_per_year"]          = round(nb_tech / max(years, 0.5), 3)
-    feat_row["career_depth"]           = round(years * avg_dur, 3)
-    feat_row["is_it"]                  = int(sector == "IT")
-    feat_row["is_finance"]             = int(sector == "Finance")
-    # v3 features
-    career_years = max((age or 30) - 22, 1)
-    feat_row["exp_per_year_of_age"]    = round(years / career_years, 3)
-    if sector == "IT":
-        feat_row["field_match"] = int(any(k in edu_field for k in IT_KW))
-    elif sector == "Finance":
-        feat_row["field_match"] = int(any(k in edu_field for k in FINANCE_KW))
-    else:
-        feat_row["field_match"] = 0
-
-    # v4 features — education_adj (compressed scale, RRK-inspired)
-    edu_raw = float(feat_row.get("education_level") or 2)
-    _edu_map = {1: 0.0, 2: 0.30, 3: 0.70, 4: 0.80}
-    feat_row["education_adj"] = _edu_map.get(round(edu_raw), 0.30)
-
-    return feat_row
-
-
-# ── Endpoints ────────────────────────────────────────────────────
-
-@app.get("/", tags=["status"])
-def root():
-    return {
-        "status": "online",
-        "model_loaded": _model is not None,
-        "endpoints": ["/score", "/api/v1/candidates", "/candidates", "/docs"],
-    }
-
-
+# ── POST /score ───────────────────────────────────────────────────────
 @app.post("/score", tags=["scoring"])
 async def score_cv(file: UploadFile = File(...)):
-    """
-    Reçoit un fichier .txt (CV), retourne le score ML et la décision.
-    Utilisé par N8N directement.
-    """
+    """Reçoit un fichier .txt (CV), retourne le score ML et la décision."""
     if _model is None:
-        raise HTTPException(503, "Modèle non disponible — relancez le pipeline.")
+        raise HTTPException(503, "Modèle non disponible.")
 
     content = await file.read()
     try:
@@ -364,7 +108,7 @@ async def score_cv(file: UploadFile = File(...)):
     except UnicodeDecodeError:
         text = content.decode("latin-1")
 
-    # Parsing : LLM Groq en priorité, fallback regex si Groq indisponible
+    # Parsing LLM → fallback regex
     try:
         id_row, feat_row = parse_cv_llm(text, filename=file.filename or "")
         logger.info(f"Parsing LLM OK — {id_row.get('name')}")
@@ -377,13 +121,11 @@ async def score_cv(file: UploadFile = File(...)):
         finally:
             tmp.unlink(missing_ok=True)
 
-    age = id_row.get("age")
-    feat_row = _enrich_features(feat_row, age)
-    result = _score_features(feat_row, age)
+    age      = id_row.get("age")
+    feat_row = enrich_features(feat_row, age)
+    result   = score_features(feat_row, age)
 
     candidate_id = id_row["cv_id"]
-
-    # Sauvegarde du texte brut pour analyse LLM future
     (RAW_TEXTS_DIR / f"{candidate_id}.txt").write_text(text, encoding="utf-8")
 
     record = {
@@ -395,11 +137,12 @@ async def score_cv(file: UploadFile = File(...)):
         **result,
         "status": "inbox",
     }
-    _save_candidate(record)
-    logger.info(f"Scoré : {id_row.get('name')} → {result['decision']} "
-                f"(score={result['score']:.3f}, rank={result['priority_rank']}e percentile)")
+    save_candidate(record)
+    logger.info(
+        f"Scoré : {id_row.get('name')} → {result['decision']} "
+        f"(score={result['score']:.3f}, rank={result['priority_rank']}e pct)"
+    )
 
-    # ── SSE broadcast ─────────────────────────────────────────────
     response_payload = {
         "candidate_id":      candidate_id,
         "name":              id_row.get("name"),
@@ -414,803 +157,25 @@ async def score_cv(file: UploadFile = File(...)):
         "status":            "inbox",
         "received_at":       record["received_at"],
     }
-    asyncio.create_task(_broadcast({"type": "candidate_scored", "data": response_payload}))
-
+    asyncio.create_task(broadcast({"type": "candidate_scored", "data": response_payload}))
     return response_payload
 
 
+# ── POST /api/v1/candidates (legacy n8n) ─────────────────────────────
 @app.post("/api/v1/candidates", tags=["n8n"])
-async def receive_cv_n8n(
-    file: UploadFile = File(...),
-    filename: str = Form(...),
-    **kwargs,
-):
-    """
-    Endpoint legacy compatible avec le workflow N8N existant.
-    Appelle /score en interne et retourne la même structure qu'avant + score ML.
-    """
+async def receive_cv_n8n(file: UploadFile = File(...), filename: str = Form(...)):
     result = await score_cv(file)
     return {
-        "status": "scored",
+        "status":       "scored",
         "candidate_id": result["candidate_id"],
-        "filename": filename,
-        "name": result.get("name"),
-        "score": result["score"],
-        "decision": result["decision"],
-        "message": f"Candidat scoré : {result['decision']} (score={result['score']:.3f})",
+        "filename":     filename,
+        "name":         result.get("name"),
+        "score":        result["score"],
+        "decision":     result["decision"],
+        "message":      f"Candidat scoré : {result['decision']} (score={result['score']:.3f})",
     }
-
-
-@app.get("/candidates", tags=["rh"])
-def list_candidates(
-    decision:  Optional[str] = Query(None, description="invite | reject | eliminated"),
-    sector:    Optional[str] = Query(None),
-    status:    Optional[str] = Query(None, description="inbox | review | interview | rejected"),
-    min_score: float         = Query(0.0),
-    limit:     int           = Query(200),
-    q:         Optional[str] = Query(None, description="recherche nom / email / rôle"),
-):
-    """Retourne la liste des candidats scorés (DB en priorité, CSV en fallback)."""
-    from sqlalchemy import desc as _desc
-    try:
-        with get_db() as db:
-            from sqlalchemy import or_
-            query_db = db.query(CandidateModel)
-            if decision:
-                query_db = query_db.filter(CandidateModel.decision == decision)
-            if sector:
-                query_db = query_db.filter(CandidateModel.sector.ilike(sector))
-            if status:
-                query_db = query_db.filter(CandidateModel.status == status)
-            if q:
-                like = f"%{q}%"
-                query_db = query_db.filter(or_(
-                    CandidateModel.name.ilike(like),
-                    CandidateModel.email.ilike(like),
-                    CandidateModel.target_role.ilike(like),
-                    CandidateModel.sector.ilike(like),
-                ))
-            query_db = query_db.filter(CandidateModel.score >= min_score)
-            rows = query_db.order_by(_desc(CandidateModel.score)).limit(limit).all()
-            if rows:
-                return [
-                    {c.name: getattr(r, c.name) for c in r.__table__.columns}
-                    for r in rows
-                ]
-    except Exception as db_err:
-        logger.warning(f"DB read failed ({db_err}), CSV fallback")
-
-    # CSV fallback
-    if not CANDIDATES_FILE.exists():
-        return []
-    df = pd.read_csv(CANDIDATES_FILE)
-    if decision:
-        df = df[df["decision"] == decision]
-    if sector:
-        df = df[df["sector"].str.lower() == sector.lower()]
-    if status and "status" in df.columns:
-        df = df[df["status"] == status]
-    df = df[pd.to_numeric(df["score"], errors="coerce").fillna(0) >= min_score]
-    df = df.sort_values("score", ascending=False).head(limit)
-    return df.fillna("").to_dict(orient="records")
-
-
-class StatusUpdate(BaseModel):
-    status: str  # inbox | review | interview | rejected
-
-@app.patch("/candidates/{candidate_id}/status", tags=["rh"])
-async def update_candidate_status(candidate_id: str, body: StatusUpdate):
-    """Met à jour le statut Kanban d'un candidat (DB + CSV)."""
-    valid = {"inbox", "review", "interview", "rejected", "archived", "interview_scheduled"}
-    if body.status not in valid:
-        raise HTTPException(400, f"Statut invalide. Valeurs acceptées : {valid}")
-
-    # DB
-    db_ok = False
-    try:
-        with get_db() as db:
-            obj = db.get(CandidateModel, candidate_id)
-            if obj:
-                obj.status = body.status
-                db_ok = True
-    except Exception as db_err:
-        logger.warning(f"DB status update failed ({db_err})")
-
-    # CSV fallback
-    if CANDIDATES_FILE.exists():
-        try:
-            df = pd.read_csv(CANDIDATES_FILE)
-            if candidate_id in df["candidate_id"].values:
-                if "status" not in df.columns:
-                    df["status"] = "inbox"
-                df.loc[df["candidate_id"] == candidate_id, "status"] = body.status
-                df.to_csv(CANDIDATES_FILE, index=False)
-        except Exception:
-            pass
-
-    if not db_ok and not CANDIDATES_FILE.exists():
-        raise HTTPException(404, f"Candidat {candidate_id} introuvable.")
-
-    # SSE broadcast
-    await _broadcast({"type": "status_updated",
-                      "data": {"candidate_id": candidate_id, "status": body.status}})
-    return {"candidate_id": candidate_id, "status": body.status}
-
-
-@app.delete("/candidates/{candidate_id}", tags=["rh"])
-async def delete_candidate(candidate_id: str):
-    """Supprime un candidat de la DB et du CSV."""
-    deleted = False
-    try:
-        with get_db() as db:
-            obj = db.get(CandidateModel, candidate_id)
-            if obj:
-                db.delete(obj)
-                deleted = True
-    except Exception as db_err:
-        logger.warning(f"DB delete failed ({db_err})")
-
-    if CANDIDATES_FILE.exists():
-        try:
-            df = pd.read_csv(CANDIDATES_FILE)
-            if candidate_id in df["candidate_id"].values:
-                df = df[df["candidate_id"] != candidate_id]
-                df.to_csv(CANDIDATES_FILE, index=False)
-                deleted = True
-        except Exception:
-            pass
-
-    if not deleted:
-        raise HTTPException(404, f"Candidat {candidate_id} introuvable.")
-
-    await _broadcast({"type": "candidate_deleted", "data": {"candidate_id": candidate_id}})
-    return {"deleted": True, "candidate_id": candidate_id}
-
-
-@app.get("/stats", tags=["rh"])
-def get_stats():
-    """Stats globales pour le dashboard RH."""
-    # ── Lecture DB ────────────────────────────────────────────────
-    df = None
-    try:
-        with get_db() as db:
-            rows = db.query(CandidateModel).all()
-            if rows:
-                df = pd.DataFrame([
-                    {c.name: getattr(r, c.name) for c in r.__table__.columns}
-                    for r in rows
-                ])
-    except Exception as db_err:
-        logger.warning(f"DB read for stats failed ({db_err})")
-
-    # ── Fallback CSV ──────────────────────────────────────────────
-    if df is None:
-        if not CANDIDATES_FILE.exists():
-            return {"total": 0, "invited": 0, "rejected": 0, "invite_rate": 0,
-                    "today": 0, "borderline": 0, "pending_review": 0, "avg_score": 0}
-        df = pd.read_csv(CANDIDATES_FILE)
-    if "status" not in df.columns:
-        df["status"] = "inbox"
-    df["score_num"] = pd.to_numeric(df["score"], errors="coerce").fillna(0)
-    df["thr_num"]   = pd.to_numeric(df["threshold_used"], errors="coerce").fillna(0.5)
-
-    today    = datetime.now().date().isoformat()
-    total    = len(df)
-    invited  = int((df["decision"] == "invite").sum())
-    rejected = int((df["decision"] == "reject").sum())
-
-    # Borderline : score dans les 8% du seuil
-    df["gap"] = (df["score_num"] - df["thr_num"]).abs()
-    borderline = int((df["gap"] <= 0.08).sum())
-
-    # En attente de revue humaine : statut inbox ou review
-    pending = int(df["status"].isin(["inbox", "review"]).sum())
-
-    # Aujourd'hui
-    today_mask = df["received_at"].astype(str).str.startswith(today)
-    today_count = int(today_mask.sum())
-
-    # Temps moyen de traitement (fictif ici — en prod: delta parse → score)
-    avg_score = round(float(df["score_num"].mean()), 3) if total else 0
-
-    # Alertes : rejetés avec score > 0.3 (profils potentiellement intéressants)
-    interesting_rejected = df[
-        (df["decision"] == "reject") & (df["score_num"] >= 0.3)
-    ][["candidate_id", "name", "score", "target_role", "sector"]].head(5).fillna("").to_dict(orient="records")
-
-    # Borderline list
-    borderline_list = df[df["gap"] <= 0.08][
-        ["candidate_id", "name", "score", "threshold_used", "target_role", "decision"]
-    ].head(5).fillna("").to_dict(orient="records")
-
-    return {
-        "total":               total,
-        "invited":             invited,
-        "rejected":            rejected,
-        "invite_rate":         round(invited / total * 100, 1) if total else 0,
-        "today":               today_count,
-        "borderline":          borderline,
-        "pending_review":      pending,
-        "avg_score":           avg_score,
-        "interesting_rejected": interesting_rejected,
-        "borderline_list":     borderline_list,
-        "by_sector": {
-            str(sector_name): {"total": len(grp), "invited": int((grp["decision"] == "invite").sum())}
-            for sector_name, grp in df.groupby("sector", dropna=True)
-        },
-    }
-
-
-RAW_DIR = ROOT / "data" / "raw"
-
-import re as _re
-_RE_SUMMARY  = _re.compile(r"Professional Summary:\s*\n(.*?)(?:\n\n|\nEducation:|\nExperience:)", _re.DOTALL)
-_RE_TECH     = _re.compile(r"Technical:\s*(.*)", _re.IGNORECASE)
-_RE_METH     = _re.compile(r"Methods:\s*(.*)",   _re.IGNORECASE)
-_RE_MAN      = _re.compile(r"Management:\s*(.*)", _re.IGNORECASE)
-_RE_LANG_BLK = _re.compile(r"Languages:(.*?)(?:Certifications:|$)", _re.DOTALL | _re.IGNORECASE)
-_RE_CERT_BLK = _re.compile(r"Certifications:(.*?)$", _re.DOTALL | _re.IGNORECASE)
-
-def _parse_cv_detail(source_filename: str) -> dict:
-    """Lit le CV brut et extrait résumé, skills, langues, certifs."""
-    # Try exact filename or stem match
-    candidates_paths = list(RAW_DIR.glob(f"{source_filename}")) + \
-                       list(RAW_DIR.glob(f"{source_filename}.txt")) + \
-                       list(RAW_DIR.glob(f"*{source_filename.replace('.txt','')}*.txt"))
-    if not candidates_paths:
-        return {}
-    text = candidates_paths[0].read_text(encoding="utf-8", errors="replace")
-
-    summary_m = _RE_SUMMARY.search(text)
-    summary   = summary_m.group(1).strip() if summary_m else ""
-
-    tech  = [s.strip() for s in (_RE_TECH.search(text) or type('', (), {'group': lambda *a: ''})()).group(1).split(",") if s.strip()]
-    meth  = [s.strip() for s in (_RE_METH.search(text) or type('', (), {'group': lambda *a: ''})()).group(1).split(",") if s.strip()]
-    mgmt  = [s.strip() for s in (_RE_MAN.search(text)  or type('', (), {'group': lambda *a: ''})()).group(1).split(",") if s.strip()]
-
-    langs = []
-    lang_m = _RE_LANG_BLK.search(text)
-    if lang_m:
-        for line in lang_m.group(1).strip().splitlines():
-            line = line.strip()
-            if line:
-                langs.append(line)
-
-    certs = []
-    cert_m = _RE_CERT_BLK.search(text)
-    if cert_m:
-        for line in cert_m.group(1).strip().splitlines():
-            line = line.strip()
-            if line and line.lower() != "none listed":
-                certs.append(line)
-
-    return {
-        "summary":      summary,
-        "skills_tech":  tech,
-        "skills_meth":  meth,
-        "skills_mgmt":  mgmt,
-        "languages":    langs,
-        "certifications": certs,
-    }
-
-
-@app.get("/candidates/{candidate_id}", tags=["rh"])
-def get_candidate(candidate_id: str):
-    """Retourne le profil complet d'un candidat (données CSV + contenu CV brut)."""
-    if not CANDIDATES_FILE.exists():
-        raise HTTPException(404, "Aucun candidat enregistré.")
-    df = pd.read_csv(CANDIDATES_FILE)
-    row = df[df["candidate_id"] == candidate_id]
-    if row.empty:
-        raise HTTPException(404, f"Candidat {candidate_id} introuvable.")
-    data = row.iloc[0].fillna("").to_dict()
-    detail = _parse_cv_detail(str(data.get("source_filename", "")))
-    return {**data, **detail}
-
-
-# ── Comments ─────────────────────────────────────────────────────
-
-def _load_comments() -> dict:
-    if not COMMENTS_FILE.exists():
-        return {}
-    return json.loads(COMMENTS_FILE.read_text(encoding="utf-8"))
-
-def _save_comments(data: dict):
-    COMMENTS_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-class CommentCreate(BaseModel):
-    author: str
-    text: str
-
-class CommentUpdate(BaseModel):
-    text: str
-
-@app.get("/comments/{candidate_id}", tags=["rh"])
-def get_comments(candidate_id: str):
-    data = _load_comments()
-    return data.get(candidate_id, [])
-
-@app.post("/comments/{candidate_id}", tags=["rh"])
-def add_comment(candidate_id: str, body: CommentCreate):
-    data = _load_comments()
-    thread = data.get(candidate_id, [])
-    comment = {
-        "id": uuid.uuid4().hex,
-        "author": body.author,
-        "text": body.text,
-        "created_at": datetime.now().isoformat(),
-        "updated_at": None,
-    }
-    thread.append(comment)
-    data[candidate_id] = thread
-    _save_comments(data)
-    return comment
-
-@app.patch("/comments/{candidate_id}/{comment_id}", tags=["rh"])
-def update_comment(candidate_id: str, comment_id: str, body: CommentUpdate):
-    data = _load_comments()
-    thread = data.get(candidate_id, [])
-    for c in thread:
-        if c["id"] == comment_id:
-            c["text"] = body.text
-            c["updated_at"] = datetime.now().isoformat()
-            data[candidate_id] = thread
-            _save_comments(data)
-            return c
-    raise HTTPException(404, "Commentaire introuvable.")
-
-@app.delete("/comments/{candidate_id}/{comment_id}", tags=["rh"])
-def delete_comment(candidate_id: str, comment_id: str):
-    data = _load_comments()
-    thread = data.get(candidate_id, [])
-    data[candidate_id] = [c for c in thread if c["id"] != comment_id]
-    _save_comments(data)
-    return {"deleted": comment_id}
-
-
-# ── Analyse période ───────────────────────────────────────────────
-
-FEATURE_LABELS = {
-    "exp_per_year_of_age":    "Exp/âge normalisé",
-    "avg_job_duration":       "Durée moy. poste",
-    "education_level":        "Niveau études",
-    "potential_score":        "Score potentiel",
-    "junior_potential":       "Potentiel junior",
-    "has_multiple_languages": "Plurilingue",
-    "career_depth":           "Prof. carrière",
-    "is_it":                  "Secteur IT",
-    "field_match":            "Field match",
-}
-
-def _shap_narrative(shap_dict: dict, score: float, threshold: float, name: str = "") -> str:
-    """Génère un résumé en langage naturel depuis les valeurs SHAP."""
-    if not shap_dict:
-        return "Pas de données d'explication disponibles."
-    sorted_feats = sorted(shap_dict.items(), key=lambda x: abs(x[1]), reverse=True)
-    positives = [(FEATURE_LABELS.get(k, k), v) for k, v in sorted_feats if v > 0.01][:3]
-    negatives = [(FEATURE_LABELS.get(k, k), v) for k, v in sorted_feats if v < -0.01][:2]
-
-    decision = "invité" if score >= threshold else "rejeté"
-    parts = [f"Score de {round(score*100)}% — profil {decision}."]
-
-    if positives:
-        pos_str = ", ".join(f"{lbl}" for lbl, _ in positives)
-        parts.append(f"Points forts : {pos_str}.")
-    if negatives:
-        neg_str = ", ".join(f"{lbl}" for lbl, _ in negatives)
-        parts.append(f"Freins : {neg_str}.")
-    return " ".join(parts)
-
-@app.get("/analyse/period", tags=["rh"])
-def analyse_period(
-    start: Optional[str] = Query(None, description="YYYY-MM-DD"),
-    end:   Optional[str] = Query(None, description="YYYY-MM-DD"),
-):
-    """Analyse agrégée sur une période : SHAP, manques, distribution features."""
-    if not CANDIDATES_FILE.exists():
-        return {"candidates": [], "shap_aggregate": {}, "feature_comparison": {}}
-    df = pd.read_csv(CANDIDATES_FILE)
-    if "received_at" in df.columns:
-        df["received_at"] = pd.to_datetime(df["received_at"], errors="coerce")
-        if start:
-            df = df[df["received_at"] >= pd.Timestamp(start)]
-        if end:
-            df = df[df["received_at"] <= pd.Timestamp(end) + pd.Timedelta(days=1)]
-
-    df["score_num"] = pd.to_numeric(df["score"], errors="coerce").fillna(0)
-    df["thr_num"]   = pd.to_numeric(df["threshold_used"], errors="coerce").fillna(0.5)
-
-    # Ensure optional columns exist (older CSV rows may not have them)
-    for col in ["shap_json", "threshold_used", "sector", "name"]:
-        if col not in df.columns:
-            df[col] = None
-
-    # Parse SHAP values
-    shap_agg = {}
-    shap_counts = {}
-    for _, row in df.iterrows():
-        try:
-            sv = json.loads(row.get("shap_json") or "{}")
-        except Exception:
-            sv = {}
-        for k, v in sv.items():
-            shap_agg[k]    = shap_agg.get(k, 0) + abs(float(v))
-            shap_counts[k] = shap_counts.get(k, 0) + 1
-
-    shap_mean = {
-        FEATURE_LABELS.get(k, k): round(shap_agg[k] / shap_counts[k], 4)
-        for k in shap_agg if shap_counts[k] > 0
-    }
-    shap_mean = dict(sorted(shap_mean.items(), key=lambda x: x[1], reverse=True))
-
-    # Feature comparison invited vs rejected
-    feat_cols = [c for c in FEATURE_LABELS if c in df.columns]
-    invited  = df[df["decision"] == "invite"]
-    rejected = df[df["decision"] == "reject"]
-    comparison = {}
-    for c in feat_cols:
-        inv_mean = round(float(pd.to_numeric(invited[c], errors="coerce").mean() or 0), 3)
-        rej_mean = round(float(pd.to_numeric(rejected[c], errors="coerce").mean() or 0), 3)
-        comparison[FEATURE_LABELS.get(c, c)] = {
-            "invited_avg":  inv_mean,
-            "rejected_avg": rej_mean,
-            "gap": round(inv_mean - rej_mean, 3),
-        }
-
-    # Candidates summary for table
-    candidates_out = df[["candidate_id","name","score","decision","threshold_used","received_at","sector","shap_json"]].copy()
-    candidates_out["received_at"] = candidates_out["received_at"].astype(str)
-
-    # Add narrative per candidate
-    records = []
-    for _, row in candidates_out.iterrows():
-        try:
-            sv = json.loads(row.get("shap_json") or "{}")
-        except Exception:
-            sv = {}
-        narrative = _shap_narrative(sv, float(row["score"] or 0), float(row["threshold_used"] or 0.5))
-        records.append({**row.fillna("").to_dict(), "narrative": narrative, "shap": sv})
-
-    return {
-        "total":              len(df),
-        "invited":            int((df["decision"] == "invite").sum()),
-        "rejected":           int((df["decision"] == "reject").sum()),
-        "invite_rate":        round(int((df["decision"] == "invite").sum()) / max(len(df), 1) * 100, 1),
-        "avg_score":          round(float(df["score_num"].mean()), 3) if len(df) else 0,
-        "shap_aggregate":     shap_mean,
-        "feature_comparison": comparison,
-        "candidates":         records,
-    }
-
-@app.get("/candidates/{candidate_id}/explain", tags=["rh"])
-def explain_candidate(candidate_id: str):
-    """Retourne SHAP values + narrative pour un candidat."""
-    if not CANDIDATES_FILE.exists():
-        raise HTTPException(404, "Aucun candidat enregistré.")
-    df = pd.read_csv(CANDIDATES_FILE)
-    row = df[df["candidate_id"] == candidate_id]
-    if row.empty:
-        raise HTTPException(404, f"Candidat {candidate_id} introuvable.")
-    r = row.iloc[0]
-    try:
-        sv = json.loads(r.get("shap_json") or "{}")
-    except Exception:
-        sv = {}
-    score = float(r.get("score") or 0)
-    thr   = float(r.get("threshold_used") or 0.5)
-
-    # Avg of invited for comparison
-    invited = df[df["decision"] == "invite"]
-    feat_cols = [c for c in FEATURE_LABELS if c in df.columns]
-    missing = []
-    for c in feat_cols:
-        candidate_val = float(pd.to_numeric(r.get(c), errors="coerce") or 0)
-        invited_avg   = float(pd.to_numeric(invited[c], errors="coerce").mean() or 0)
-        if invited_avg > 0 and candidate_val < invited_avg * 0.7:
-            missing.append({
-                "feature": FEATURE_LABELS.get(c, c),
-                "candidate_value": round(candidate_val, 3),
-                "invited_avg": round(invited_avg, 3),
-                "gap_pct": round((invited_avg - candidate_val) / invited_avg * 100, 1),
-            })
-
-    labeled_shap = {FEATURE_LABELS.get(k, k): v for k, v in sv.items()}
-    return {
-        "shap": labeled_shap,
-        "narrative": _shap_narrative(sv, score, thr),
-        "missing": sorted(missing, key=lambda x: x["gap_pct"], reverse=True)[:4],
-        "score": score,
-        "threshold": thr,
-    }
-
-
-@app.get("/candidates/{candidate_id}/semantic", tags=["rh"])
-def semantic_analysis(candidate_id: str):
-    """
-    Analyse sémantique LLM du CV brut.
-    Retourne : équivalences compétences, trajectoire, gaps, score sémantique, signaux faibles.
-    Nécessite ANTHROPIC_API_KEY dans l'environnement.
-    """
-    if _groq_client is None:
-        raise HTTPException(503, "Client Groq non initialisé. Vérifiez GROQ_API_KEY.")
-
-    raw_file = RAW_TEXTS_DIR / f"{candidate_id}.txt"
-    if not raw_file.exists():
-        raise HTTPException(404, f"Texte CV introuvable pour {candidate_id}. Soumettez d'abord le CV via /score.")
-
-    cv_text = raw_file.read_text(encoding="utf-8", errors="ignore")[:12000]  # ~3k tokens max
-
-    # Récupérer le profil ML existant pour contexte
-    context_snippet = ""
-    if CANDIDATES_FILE.exists():
-        df = pd.read_csv(CANDIDATES_FILE)
-        row = df[df["candidate_id"] == candidate_id]
-        if not row.empty:
-            r = row.iloc[0]
-            context_snippet = (
-                f"Score ML : {r.get('score', '?')} | Décision : {r.get('decision', '?')} | "
-                f"Expérience : {r.get('years_experience', '?')} ans | "
-                f"Secteur : {r.get('sector', '?')} | Éducation : {r.get('education_level', '?')}"
-            )
-
-    prompt = f"""Tu es un expert RH senior et psychologue du travail. Analyse ce CV de façon approfondie et bienveillante, en cherchant à révéler le potentiel réel du candidat au-delà des critères classiques.
-
-CONTEXTE ML (pour information, ne pas reproduire) :
-{context_snippet}
-
-CV BRUT :
-\"\"\"
-{cv_text}
-\"\"\"
-
-Réponds UNIQUEMENT en JSON valide avec cette structure exacte :
-{{
-  "semantic_score": <entier 0-100, ta propre évaluation holistique>,
-  "trajectory": "<2-3 phrases : sens de la carrière, cohérence, évolution, signaux de leadership>",
-  "skill_equivalencies": [
-    {{"stated": "<compétence telle qu'écrite>", "equivalent": "<traduction/équivalent reconnu>", "level": "<junior|confirmed|expert>"}}
-  ],
-  "career_gaps": [
-    {{"period": "<période approximative>", "likely_reason": "<explication bienveillante>", "impact": "<faible|modéré|fort>"}}
-  ],
-  "hidden_gems": ["<signal positif non capturé par ML>"],
-  "red_flags": ["<point de vigilance factuel, sans jugement>"],
-  "recommendation": "<une phrase de recommandation pour le recruteur>"
-}}
-
-Sois factuel, bienveillant, et cherche les compétences transversales et le potentiel caché. Limite skill_equivalencies à 5 max, hidden_gems à 3 max, red_flags à 2 max."""
-
-    try:
-        completion = _groq_client.chat.completions.create(
-            model=GROQ_MODEL,
-            max_tokens=1024,
-            temperature=0.3,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        raw_response = completion.choices[0].message.content.strip()
-        # Extraire le JSON (le LLM peut ajouter du texte autour)
-        import re
-        json_match = re.search(r'\{.*\}', raw_response, re.DOTALL)
-        if json_match:
-            result = json.loads(json_match.group())
-        else:
-            result = json.loads(raw_response)
-    except json.JSONDecodeError as e:
-        raise HTTPException(500, f"Réponse LLM non parseable : {e}")
-    except Exception as e:
-        raise HTTPException(500, f"Erreur Groq API : {e}")
-
-    return {
-        "candidate_id": candidate_id,
-        "model": GROQ_MODEL,
-        **result,
-    }
-
-
-@app.get("/analyse/spotcheck", tags=["rh"])
-def spotcheck_rejected(n: int = Query(5, ge=1, le=20)):
-    """
-    Audit aléatoire de la pile rejetée.
-    Retourne n candidats rejetés avec comparaison vs moyenne des invités.
-    Objectif : détecter les profils potentiellement sous-scorés (faux négatifs).
-    """
-    if not CANDIDATES_FILE.exists():
-        return {"spotcheck": [], "invited_averages": {}}
-
-    df = pd.read_csv(CANDIDATES_FILE)
-    feat_cols = [c for c in FEATURE_LABELS if c in df.columns]
-
-    invited  = df[df["decision"] == "invite"]
-    rejected = df[df["decision"] == "reject"]
-
-    if rejected.empty:
-        return {"spotcheck": [], "invited_averages": {}, "message": "Aucun candidat rejeté."}
-
-    # Moyennes des invités
-    invited_avgs = {}
-    for c in feat_cols:
-        val = pd.to_numeric(invited[c], errors="coerce").mean()
-        if not pd.isna(val):
-            invited_avgs[FEATURE_LABELS.get(c, c)] = round(float(val), 3)
-
-    # Sélection aléatoire de n rejetés
-    sample = rejected.sample(min(n, len(rejected)), random_state=None)
-
-    spotcheck_out = []
-    for _, row in sample.iterrows():
-        score = float(row.get("score") or 0)
-        thr   = float(row.get("threshold_used") or 0.5)
-        gap   = round(thr - score, 3)  # distance au seuil (positif = sous le seuil)
-
-        # Features proches des moyennes invités : signaux de sous-scoring
-        near_invite = []
-        for c in feat_cols:
-            cand_val = float(pd.to_numeric(row.get(c), errors="coerce") or 0)
-            inv_avg  = float(pd.to_numeric(invited[c], errors="coerce").mean() or 0)
-            if inv_avg > 0 and cand_val >= inv_avg * 0.85:
-                near_invite.append({
-                    "feature": FEATURE_LABELS.get(c, c),
-                    "candidate_value": round(cand_val, 3),
-                    "invited_avg": round(inv_avg, 3),
-                    "pct_of_avg": round(cand_val / inv_avg * 100, 1),
-                })
-
-        try:
-            sv = json.loads(row.get("shap_json") or "{}")
-        except Exception:
-            sv = {}
-        labeled_shap = {FEATURE_LABELS.get(k, k): v for k, v in sv.items()}
-
-        spotcheck_out.append({
-            "candidate_id":   str(row.get("candidate_id", "")),
-            "name":           str(row.get("name") or "—"),
-            "sector":         str(row.get("sector") or "—"),
-            "score":          score,
-            "threshold":      thr,
-            "gap_to_threshold": gap,
-            "received_at":    str(row.get("received_at") or ""),
-            "near_invite_features": sorted(near_invite, key=lambda x: x["pct_of_avg"], reverse=True)[:4],
-            "shap":           labeled_shap,
-            "narrative":      _shap_narrative(sv, score, thr, str(row.get("name") or "")),
-            "suspicious":     gap < 0.05,  # très proche du seuil → potentiel faux négatif
-        })
-
-    # Trier par proximité au seuil (plus suspect en premier)
-    spotcheck_out.sort(key=lambda x: x["gap_to_threshold"])
-
-    return {
-        "n_rejected_total": len(rejected),
-        "n_sampled":        len(spotcheck_out),
-        "invited_averages": invited_avgs,
-        "spotcheck":        spotcheck_out,
-    }
-
-
-# ── Jobs ─────────────────────────────────────────────────────────────
-
-STAGE_PROGRESS = {
-    "sourcing":         15,
-    "review":           40,
-    "interview":        65,
-    "final_interview":  85,
-    "closed":          100,
-}
-
-class JobCreate(BaseModel):
-    title:            str
-    department:       Optional[str] = None
-    location:         Optional[str] = None
-    description:      Optional[str] = None
-    status:           str = "active"
-    stage:            str = "sourcing"
-    priority:         str = "normal"
-    applicants_count: int = 0
-    avg_score:        Optional[float] = None
-
-class JobUpdate(BaseModel):
-    title:            Optional[str]   = None
-    department:       Optional[str]   = None
-    location:         Optional[str]   = None
-    description:      Optional[str]   = None
-    status:           Optional[str]   = None
-    stage:            Optional[str]   = None
-    priority:         Optional[str]   = None
-    applicants_count: Optional[int]   = None
-    avg_score:        Optional[float] = None
-
-def _job_to_dict(j: JobModel) -> dict:
-    return {
-        "job_id":           j.job_id,
-        "title":            j.title,
-        "department":       j.department,
-        "location":         j.location,
-        "description":      j.description,
-        "status":           j.status,
-        "stage":            j.stage,
-        "priority":         j.priority,
-        "applicants_count": j.applicants_count or 0,
-        "avg_score":        j.avg_score,
-        "progress":         STAGE_PROGRESS.get(j.stage or "sourcing", 15),
-        "created_at":       j.created_at.isoformat() if j.created_at else None,
-        "updated_at":       j.updated_at.isoformat() if j.updated_at else None,
-    }
-
-@app.get("/jobs", tags=["jobs"])
-def list_jobs(status: Optional[str] = Query(None)):
-    """Retourne toutes les offres d'emploi."""
-    try:
-        with get_db() as db:
-            q = db.query(JobModel)
-            if status:
-                q = q.filter(JobModel.status == status)
-            jobs = q.order_by(JobModel.created_at.desc()).all()
-            return [_job_to_dict(j) for j in jobs]
-    except Exception as e:
-        logger.error(f"Error listing jobs: {e}")
-        raise HTTPException(500, "Erreur lors de la récupération des offres.")
-
-@app.post("/jobs", tags=["jobs"])
-def create_job(body: JobCreate):
-    """Crée une nouvelle offre d'emploi."""
-    import uuid as _uuid
-    try:
-        with get_db() as db:
-            job = JobModel(
-                job_id=_uuid.uuid4().hex,
-                title=body.title,
-                department=body.department,
-                location=body.location,
-                description=body.description,
-                status=body.status,
-                stage=body.stage,
-                priority=body.priority,
-                applicants_count=body.applicants_count,
-                avg_score=body.avg_score,
-                created_at=datetime.utcnow(),
-            )
-            db.add(job)
-            db.flush()
-            return _job_to_dict(job)
-    except Exception as e:
-        logger.error(f"Error creating job: {e}")
-        raise HTTPException(500, "Erreur lors de la création de l'offre.")
-
-@app.patch("/jobs/{job_id}", tags=["jobs"])
-def update_job(job_id: str, body: JobUpdate):
-    """Met à jour une offre d'emploi."""
-    try:
-        with get_db() as db:
-            job = db.get(JobModel, job_id)
-            if not job:
-                raise HTTPException(404, f"Offre {job_id} introuvable.")
-            for field, val in body.model_dump(exclude_unset=True).items():
-                setattr(job, field, val)
-            job.updated_at = datetime.utcnow()
-            db.flush()
-            return _job_to_dict(job)
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error updating job: {e}")
-        raise HTTPException(500, "Erreur lors de la mise à jour de l'offre.")
-
-@app.delete("/jobs/{job_id}", tags=["jobs"])
-def delete_job(job_id: str):
-    """Supprime une offre d'emploi."""
-    try:
-        with get_db() as db:
-            job = db.get(JobModel, job_id)
-            if not job:
-                raise HTTPException(404, f"Offre {job_id} introuvable.")
-            db.delete(job)
-        return {"deleted": True, "job_id": job_id}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting job: {e}")
-        raise HTTPException(500, "Erreur lors de la suppression de l'offre.")
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("api.main:app", host="0.0.0.0", port=8000, reload=True)
