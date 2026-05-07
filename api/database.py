@@ -5,6 +5,7 @@ La variable DATABASE_URL détermine le moteur utilisé.
 """
 
 import os
+import uuid
 from datetime import datetime
 from sqlalchemy import (
     create_engine, Column, String, Float, Integer,
@@ -86,6 +87,29 @@ def get_db() -> Session:
         raise
     finally:
         db.close()
+
+
+# ── Modèle Job ───────────────────────────────────────────────────────
+class Job(Base):
+    __tablename__ = "jobs"
+
+    job_id       = Column(String(64),  primary_key=True, default=lambda: uuid.uuid4().hex)
+    title        = Column(String(255), nullable=False)
+    department   = Column(String(128), nullable=True)
+    location     = Column(String(255), nullable=True)
+    description  = Column(Text,        nullable=True)
+
+    # Workflow
+    status       = Column(String(32),  default="active", index=True)   # active | draft | closed | paused
+    stage        = Column(String(32),  default="sourcing")              # sourcing | review | interview | final_interview | closed
+    priority     = Column(String(32),  default="normal")                # normal | high | strategic
+
+    # Denormalized counters (mis à jour par l'UI ou cron)
+    applicants_count = Column(Integer, default=0)
+    avg_score        = Column(Float,   nullable=True)
+
+    created_at   = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at   = Column(DateTime, nullable=True)
 
 
 def init_db():

@@ -30,7 +30,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 
 # ── Database ─────────────────────────────────────────────────────────
-from api.database import init_db, get_db, Candidate as CandidateModel
+from api.database import init_db, get_db, Candidate as CandidateModel, Job as JobModel
 
 try:
     from groq import Groq as _Groq
@@ -1084,6 +1084,131 @@ def spotcheck_rejected(n: int = Query(5, ge=1, le=20)):
         "invited_averages": invited_avgs,
         "spotcheck":        spotcheck_out,
     }
+
+
+# ── Jobs ─────────────────────────────────────────────────────────────
+
+STAGE_PROGRESS = {
+    "sourcing":         15,
+    "review":           40,
+    "interview":        65,
+    "final_interview":  85,
+    "closed":          100,
+}
+
+class JobCreate(BaseModel):
+    title:            str
+    department:       Optional[str] = None
+    location:         Optional[str] = None
+    description:      Optional[str] = None
+    status:           str = "active"
+    stage:            str = "sourcing"
+    priority:         str = "normal"
+    applicants_count: int = 0
+    avg_score:        Optional[float] = None
+
+class JobUpdate(BaseModel):
+    title:            Optional[str]   = None
+    department:       Optional[str]   = None
+    location:         Optional[str]   = None
+    description:      Optional[str]   = None
+    status:           Optional[str]   = None
+    stage:            Optional[str]   = None
+    priority:         Optional[str]   = None
+    applicants_count: Optional[int]   = None
+    avg_score:        Optional[float] = None
+
+def _job_to_dict(j: JobModel) -> dict:
+    return {
+        "job_id":           j.job_id,
+        "title":            j.title,
+        "department":       j.department,
+        "location":         j.location,
+        "description":      j.description,
+        "status":           j.status,
+        "stage":            j.stage,
+        "priority":         j.priority,
+        "applicants_count": j.applicants_count or 0,
+        "avg_score":        j.avg_score,
+        "progress":         STAGE_PROGRESS.get(j.stage or "sourcing", 15),
+        "created_at":       j.created_at.isoformat() if j.created_at else None,
+        "updated_at":       j.updated_at.isoformat() if j.updated_at else None,
+    }
+
+@app.get("/jobs", tags=["jobs"])
+def list_jobs(status: Optional[str] = Query(None)):
+    """Retourne toutes les offres d'emploi."""
+    try:
+        with get_db() as db:
+            q = db.query(JobModel)
+            if status:
+                q = q.filter(JobModel.status == status)
+            jobs = q.order_by(JobModel.created_at.desc()).all()
+            return [_job_to_dict(j) for j in jobs]
+    except Exception as e:
+        logger.error(f"Error listing jobs: {e}")
+        raise HTTPException(500, "Erreur lors de la récupération des offres.")
+
+@app.post("/jobs", tags=["jobs"])
+def create_job(body: JobCreate):
+    """Crée une nouvelle offre d'emploi."""
+    import uuid as _uuid
+    try:
+        with get_db() as db:
+            job = JobModel(
+                job_id=_uuid.uuid4().hex,
+                title=body.title,
+                department=body.department,
+                location=body.location,
+                description=body.description,
+                status=body.status,
+                stage=body.stage,
+                priority=body.priority,
+                applicants_count=body.applicants_count,
+                avg_score=body.avg_score,
+                created_at=datetime.utcnow(),
+            )
+            db.add(job)
+            db.flush()
+            return _job_to_dict(job)
+    except Exception as e:
+        logger.error(f"Error creating job: {e}")
+        raise HTTPException(500, "Erreur lors de la création de l'offre.")
+
+@app.patch("/jobs/{job_id}", tags=["jobs"])
+def update_job(job_id: str, body: JobUpdate):
+    """Met à jour une offre d'emploi."""
+    try:
+        with get_db() as db:
+            job = db.get(JobModel, job_id)
+            if not job:
+                raise HTTPException(404, f"Offre {job_id} introuvable.")
+            for field, val in body.model_dump(exclude_unset=True).items():
+                setattr(job, field, val)
+            job.updated_at = datetime.utcnow()
+            db.flush()
+            return _job_to_dict(job)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating job: {e}")
+        raise HTTPException(500, "Erreur lors de la mise à jour de l'offre.")
+
+@app.delete("/jobs/{job_id}", tags=["jobs"])
+def delete_job(job_id: str):
+    """Supprime une offre d'emploi."""
+    try:
+        with get_db() as db:
+            job = db.get(JobModel, job_id)
+            if not job:
+                raise HTTPException(404, f"Offre {job_id} introuvable.")
+            db.delete(job)
+        return {"deleted": True, "job_id": job_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting job: {e}")
+        raise HTTPException(500, "Erreur lors de la suppression de l'offre.")
 
 
 if __name__ == "__main__":

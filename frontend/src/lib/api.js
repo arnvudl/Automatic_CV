@@ -54,3 +54,14 @@ export const addComment     = (id, author, text) =>
   request(`/comments/${id}`, { method: 'POST', body: JSON.stringify({ author, text }) })
 export const deleteComment  = (id, cid)      =>
   request(`/comments/${id}/${cid}`, { method: 'DELETE' })
+
+// ── Jobs ─────────────────────────────────────────────────────────────
+export const getJobs    = (params = {}) => {
+  const qs = new URLSearchParams(
+    Object.fromEntries(Object.entries(params).filter(([, v]) => v != null))
+  ).toString()
+  return request(`/jobs${qs ? '?' + qs : ''}`)
+}
+export const createJob  = (data)         => request('/jobs', { method: 'POST', body: JSON.stringify(data) })
+export const updateJob  = (id, data)     => request(`/jobs/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+export const deleteJob  = (id)           => request(`/jobs/${id}`, { method: 'DELETE' })
