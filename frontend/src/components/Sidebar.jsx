@@ -4,6 +4,7 @@ const NAV_ITEMS = [
   { id: 'dashboard',  label: 'Tableau de bord', icon: 'dashboard' },
   { id: 'jobs',       label: 'Offres',           icon: 'work_outline' },
   { id: 'candidates', label: 'Candidats',        icon: 'group' },
+  { id: 'archives',   label: 'Archives',         icon: 'inventory_2' },
   { id: 'calendar',   label: 'Entretiens',       icon: 'calendar_today' },
   { id: 'settings',   label: 'Paramètres',       icon: 'settings' },
 ]
