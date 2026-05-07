@@ -140,7 +140,8 @@ export default function CandidateProfile({ onNavigate, candidateId }) {
             await handleStatus('interview_scheduled')
             showToast(`Entretien ${type} planifié le ${new Date(date).toLocaleDateString('fr-FR')} à ${time}`)
           }}
-        />}
+        />
+      )}
       {/* Breadcrumb */}
       <div className="flex justify-between items-center mb-10">
         <button onClick={() => onNavigate('candidates')}
