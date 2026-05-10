@@ -22,6 +22,44 @@ except ImportError:
     pass
 
 # ==============================================================
+# EXTRACTION TEXTE SELON FORMAT
+# ==============================================================
+
+def _extract_text_pdf(filepath: Path) -> str:
+    try:
+        import pdfplumber
+        with pdfplumber.open(filepath) as pdf:
+            text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+        if len(text.strip()) > 100:
+            return text
+    except Exception as e:
+        print(f"  [pdfplumber] Extraction échouée sur {filepath.name} : {e}")
+    # Texte insuffisant → signal pour fallback (Phase 3 : GLM-OCR)
+    print(f"  [WARN] PDF graphique détecté : {filepath.name} — texte insuffisant, OCR recommandé (Phase 3)")
+    return ""
+
+
+def _extract_text_docx(filepath: Path) -> str:
+    try:
+        from docx import Document
+        doc = Document(filepath)
+        return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+    except Exception as e:
+        print(f"  [python-docx] Extraction échouée sur {filepath.name} : {e}")
+        return ""
+
+
+def extract_text(filepath: Path) -> str:
+    suffix = filepath.suffix.lower()
+    if suffix == ".txt":
+        return filepath.read_text(encoding="utf-8", errors="ignore")
+    if suffix == ".pdf":
+        return _extract_text_pdf(filepath)
+    if suffix in (".docx", ".doc"):
+        return _extract_text_docx(filepath)
+    return ""
+
+# ==============================================================
 # CONFIG
 # ==============================================================
 ROOT = Path(__file__).parent.parent.parent
@@ -528,38 +566,57 @@ def main():
                     stem = Path(row['filename']).stem
                     labels_dict[stem] = row['passed_next_stage']
 
-    cv_files = list(RAW_FOLDER.glob("*.txt"))
+    # .txt structurés + .pdf + .docx
+    cv_files = (
+        list(RAW_FOLDER.glob("*.txt")) +
+        list(RAW_FOLDER.glob("*.pdf")) +
+        list(RAW_FOLDER.glob("*.docx"))
+    )
     if not cv_files:
-        print("Aucun fichier .txt trouvé dans", RAW_FOLDER)
+        print("Aucun fichier CV (.txt, .pdf, .docx) trouvé dans", RAW_FOLDER)
         return
+
+    # Fichiers non-.txt : toujours via LLM (format non structuré)
+    non_txt = {f for f in cv_files if f.suffix.lower() != ".txt"}
+    if non_txt:
+        print(f"  {len(non_txt)} fichier(s) PDF/DOCX détecté(s) → parsing LLM automatique")
 
     identities = []
     features   = []
     errors = 0
 
+    def _process_llm(filepath: Path) -> tuple:
+        text = extract_text(filepath)
+        if not text.strip():
+            raise ValueError(f"Texte vide après extraction — {filepath.name}")
+        return parse_cv_llm(text, labels_dict, filename=filepath.name)
+
     if use_llm:
         # LLM : séquentiel pour respecter le rate limit Groq
         for i, filepath in enumerate(cv_files, 1):
             try:
-                text = filepath.read_text(encoding="utf-8", errors="ignore")
-                id_row, feat_row = parse_cv_llm(text, labels_dict, filename=filepath.name)
+                id_row, feat_row = _process_llm(filepath)
                 identities.append(id_row)
                 features.append(feat_row)
                 print(f"  [{i}/{len(cv_files)}] {filepath.name} → {id_row.get('name', '?')}")
             except Exception as exc:
                 errors += 1
                 print(f"  [ERREUR] {filepath.name} : {exc}")
-                # Fallback regex sur erreur LLM individuelle
-                try:
-                    id_row, feat_row = parse_cv(filepath, labels_dict)
-                    identities.append(id_row)
-                    features.append(feat_row)
-                    print(f"    ↳ Fallback regex OK")
-                except Exception as exc2:
-                    print(f"    ↳ Fallback regex aussi échoué : {exc2}")
+                if filepath.suffix.lower() == ".txt":
+                    try:
+                        id_row, feat_row = parse_cv(filepath, labels_dict)
+                        identities.append(id_row)
+                        features.append(feat_row)
+                        print(f"    ↳ Fallback regex OK")
+                    except Exception as exc2:
+                        print(f"    ↳ Fallback regex aussi échoué : {exc2}")
     else:
+        # Regex uniquement pour les .txt ; PDF/DOCX → LLM automatiquement
+        txt_files    = [f for f in cv_files if f.suffix.lower() == ".txt"]
+        binary_files = [f for f in cv_files if f.suffix.lower() != ".txt"]
+
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-            futures = {pool.submit(parse_cv, f, labels_dict): f for f in cv_files}
+            futures = {pool.submit(parse_cv, f, labels_dict): f for f in txt_files}
             for future in as_completed(futures):
                 filepath = futures[future]
                 try:
@@ -569,6 +626,16 @@ def main():
                 except Exception as exc:
                     errors += 1
                     print(f"  [ERREUR] {filepath.name} : {exc}")
+
+        for i, filepath in enumerate(binary_files, 1):
+            try:
+                id_row, feat_row = _process_llm(filepath)
+                identities.append(id_row)
+                features.append(feat_row)
+                print(f"  [LLM {i}/{len(binary_files)}] {filepath.name} → {id_row.get('name', '?')}")
+            except Exception as exc:
+                errors += 1
+                print(f"  [ERREUR] {filepath.name} : {exc}")
 
     feat_headers = [
         'cv_id', 'profile_type', 'target_role', 'sector',

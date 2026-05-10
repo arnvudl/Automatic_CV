@@ -1,0 +1,10 @@
+pandas
+numpy
+joblib
+scikit-learn
+shap
+python-dotenv
+groq
+mlflow
+pdfplumber
+python-docx

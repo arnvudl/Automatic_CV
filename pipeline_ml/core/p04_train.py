@@ -18,8 +18,10 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKFold
 from sklearn.metrics import (
-    classification_report, roc_auc_score, precision_recall_curve
+    classification_report, roc_auc_score, precision_recall_curve, f1_score
 )
+import mlflow
+import mlflow.sklearn
 
 # Grille d'hyperparamètres explorée
 # sklearn 1.8+ : penalty déprécié → on utilise l1_ratio avec solver=saga
@@ -134,14 +136,16 @@ def main():
                       (y_proba_te >= thr_junior).astype(int),
                       (y_proba_te >= thr_adult).astype(int))
 
-    auc = roc_auc_score(y_test, y_proba_te)
+    auc    = roc_auc_score(y_test, y_proba_te)
+    f1     = f1_score(y_test, y_pred)
     report = classification_report(y_test, y_pred, target_names=["Rejete", "Invite"])
 
     print(f"Modele v2 — AUC : {auc:.3f}")
     print(f"Seuil adultes (30+) : {thr_adult:.3f}  |  Seuil juniors (<30) : {thr_junior:.3f}")
     print(report)
 
-    with open(REPORTS_DIR / "evaluation.txt", "w", encoding="utf-8") as f:
+    eval_path = REPORTS_DIR / "evaluation.txt"
+    with open(eval_path, "w", encoding="utf-8") as f:
         f.write("Modele : Logistic Regression (v4-RRK-GCA)\n")
         f.write(f"Meilleurs hyperparametres : {best_params}\n")
         f.write(f"AUC-ROC CV (5-fold)       : {best_cv_auc:.3f}\n")
@@ -157,6 +161,32 @@ def main():
     joblib.dump(thr_adult,   MODELS_DIR / "threshold.pkl")
     joblib.dump(thr_junior,  MODELS_DIR / "threshold_junior.pkl")
     print(f"Modele sauvegarde dans {MODELS_DIR}")
+
+    # ── MLflow tracking ──────────────────────────────────────────
+    mlflow.set_experiment("cv-intelligence")
+    with mlflow.start_run(run_name="LR-v4-train") as run:
+        mlflow.log_params({
+            "C":             best_params["C"],
+            "l1_ratio":      best_params["l1_ratio"],
+            "solver":        best_params["solver"],
+            "class_weight":  best_params["class_weight"],
+            "threshold_adult":  round(thr_adult, 4),
+            "threshold_junior": round(thr_junior, 4),
+            "n_features":    len(V2_FEATURES),
+            "train_size":    len(X_train),
+            "test_size":     len(X_test),
+        })
+        mlflow.log_metrics({
+            "auc_roc_cv5":  round(best_cv_auc, 4),
+            "auc_roc_test": round(auc, 4),
+            "f1_test":      round(f1, 4),
+        })
+        mlflow.log_artifact(str(eval_path))
+        mlflow.sklearn.log_model(model, artifact_path="model")
+
+        # Sauvegarde du run_id pour que p06_audit.py continue ce run
+        (MODELS_DIR / "mlflow_run_id.txt").write_text(run.info.run_id)
+    print(f"MLflow run logged : {run.info.run_id}")
 
 
 if __name__ == "__main__":

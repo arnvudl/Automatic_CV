@@ -13,6 +13,7 @@ import numpy as np
 import shap
 from pathlib import Path
 from sklearn.metrics import recall_score, precision_score
+import mlflow
 
 ROOT             = Path(__file__).parent.parent.parent
 FEATURES_PATH    = ROOT / "data" / "processed" / "features.csv"
@@ -161,6 +162,43 @@ def main():
     with open(audit_path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
     print(f"Audit v2 termine. Rapport : {audit_path}")
+
+    # ── MLflow — continue le run d'entraînement si disponible ────
+    mlflow.set_experiment("cv-intelligence")
+    run_id_file = MODEL_PATH.parent / "mlflow_run_id.txt"
+    saved_run_id = run_id_file.read_text().strip() if run_id_file.exists() else None
+
+    with mlflow.start_run(run_id=saved_run_id, run_name="Audit-v2"):
+        # Fairness par genre
+        for g in ["Female", "Male"]:
+            mask = df["gender"] == g
+            if not mask.any():
+                continue
+            rec  = recall_score(y_true[mask], y_pred[mask], zero_division=0)
+            prec = precision_score(y_true[mask], y_pred[mask], zero_division=0)
+            mlflow.log_metrics({
+                f"recall_{g.lower()}":    round(rec, 4),
+                f"precision_{g.lower()}": round(prec, 4),
+            })
+        if "Male" in gender_stats and "Female" in gender_stats:
+            gap = gender_stats["Male"] - gender_stats["Female"]
+            mlflow.log_metric("recall_gap_male_female", round(gap, 4))
+
+        # Fairness par groupe d'âge
+        for age_grp in df["age_group"].unique():
+            mask = df["age_group"] == age_grp
+            if mask.sum() < 2:
+                continue
+            rec = recall_score(y_true[mask], y_pred[mask], zero_division=0)
+            key = age_grp.replace(" ", "_").replace("(", "").replace(")", "").replace("<", "lt").replace(">", "gt")
+            mlflow.log_metric(f"recall_age_{key}", round(rec, 4))
+
+        # SHAP importances
+        for feat, val in feat_imp.items():
+            mlflow.log_metric(f"shap_{feat}", round(float(val), 4))
+
+        mlflow.log_artifact(str(audit_path))
+    print(f"MLflow audit loggé sur run : {saved_run_id or 'nouveau run'}")
 
 
 if __name__ == "__main__":
