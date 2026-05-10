@@ -18,7 +18,6 @@ from scipy import stats
 ROOT            = Path(__file__).parent.parent.parent
 FEATURES_PATH   = ROOT / "data" / "processed" / "features.csv"
 IDENTITIES_PATH = ROOT / "data" / "processed" / "identities.csv"
-REPORTS_DIR     = ROOT / "reports"
 
 EDU_LABELS  = {1: "Bac ou moins", 2: "Bachelor", 3: "Master", 4: "PhD"}
 AGE_BINS    = [0, 29, 45, 99]
@@ -117,7 +116,6 @@ def print_and_save(text: str, out_lines: list) -> None:
 # ── Main ───────────────────────────────────────────────────────────
 
 def main():
-    REPORTS_DIR.mkdir(exist_ok=True)
     out_lines = []
 
     if not FEATURES_PATH.exists():
@@ -281,11 +279,7 @@ def main():
 
     print_and_save(conclusion, out_lines)
 
-    # ── Sauvegarde ─────────────────────────────────────────────────
-    report_path = REPORTS_DIR / "label_audit.txt"
-    with open(report_path, "w", encoding="utf-8") as f:
-        f.write("\n".join(out_lines))
-    print(f"\nRapport sauvegardé : {report_path}")
+    print("\nLabel audit terminé.")
 
 
 if __name__ == "__main__":

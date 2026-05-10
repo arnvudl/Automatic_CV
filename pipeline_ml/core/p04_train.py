@@ -7,10 +7,11 @@ Changements vs v1 :
   - Grid Search CV ajouté : optimise C, penalty, solver sur AUC-ROC (5-fold stratifié)
 Seuils   : adultes (F1-optimal) et juniors (recall >= 0.55) calculés sur train
 Sorties  : model.pkl, scaler.pkl, feature_cols.pkl, threshold.pkl,
-           threshold_junior.pkl, reports/evaluation.txt
+           threshold_junior.pkl — métriques loggées dans MLflow
 """
 
 import joblib
+import tempfile
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -37,7 +38,6 @@ ROOT            = Path(__file__).parent.parent.parent
 FEATURES_PATH   = ROOT / "data" / "processed" / "features.csv"
 IDENTITIES_PATH = ROOT / "data" / "processed" / "identities.csv"
 MODELS_DIR      = ROOT / "models"
-REPORTS_DIR     = ROOT / "reports"
 RANDOM_STATE    = 42
 
 V2_FEATURES = [
@@ -77,7 +77,6 @@ def best_threshold_recall(y_true, y_proba, recall_target=0.55):
 
 def main():
     MODELS_DIR.mkdir(exist_ok=True)
-    REPORTS_DIR.mkdir(exist_ok=True)
 
     df, target = load_data()
 
@@ -170,17 +169,6 @@ def main():
     print(f"Seuil adultes (30+) : {thr_adult:.3f}  |  Seuil juniors (<30) : {thr_junior:.3f}")
     print(report)
 
-    eval_path = REPORTS_DIR / "evaluation.txt"
-    with open(eval_path, "w", encoding="utf-8") as f:
-        f.write("Modele : Logistic Regression (v4-RRK-GCA)\n")
-        f.write(f"Meilleurs hyperparametres : {best_params}\n")
-        f.write(f"AUC-ROC CV (5-fold)       : {best_cv_auc:.3f}\n")
-        f.write(f"Seuil adultes (30+) : {thr_adult:.3f}\n")
-        f.write(f"Seuil juniors (<30) : {thr_junior:.3f}\n")
-        f.write(f"Features : {V2_FEATURES}\n")
-        f.write(f"AUC-ROC test : {auc:.3f}\n\n")
-        f.write(report)
-
     joblib.dump(model,       MODELS_DIR / "model.pkl")
     joblib.dump(scaler,      MODELS_DIR / "scaler.pkl")
     joblib.dump(V2_FEATURES, MODELS_DIR / "feature_cols.pkl")
@@ -189,28 +177,45 @@ def main():
     print(f"Modele sauvegarde dans {MODELS_DIR}")
 
     # ── MLflow tracking ──────────────────────────────────────────
+    eval_content = (
+        "Modele : Logistic Regression (v4-RRK-GCA)\n"
+        f"Meilleurs hyperparametres : {best_params}\n"
+        f"AUC-ROC CV (5-fold)       : {best_cv_auc:.3f}\n"
+        f"Seuil adultes (30+) : {thr_adult:.3f}\n"
+        f"Seuil juniors (<30) : {thr_junior:.3f}\n"
+        f"Features : {V2_FEATURES}\n"
+        f"AUC-ROC test : {auc:.3f}\n\n"
+        + report
+    )
     mlflow.set_experiment("cv-intelligence")
     with mlflow.start_run(run_name="LR-v4-train") as run:
         mlflow.log_params({
-            "C":             best_params["C"],
-            "l1_ratio":      best_params["l1_ratio"],
-            "solver":        best_params["solver"],
-            "class_weight":  best_params["class_weight"],
+            "C":                best_params["C"],
+            "l1_ratio":         best_params["l1_ratio"],
+            "solver":           best_params["solver"],
+            "class_weight":     best_params["class_weight"],
             "threshold_adult":  round(thr_adult, 4),
             "threshold_junior": round(thr_junior, 4),
-            "n_features":    len(V2_FEATURES),
-            "train_size":    len(X_train),
-            "test_size":     len(X_test),
+            "n_features":       len(V2_FEATURES),
+            "train_size":       len(X_train),
+            "test_size":        len(X_test),
         })
         mlflow.log_metrics({
             "auc_roc_cv5":  round(best_cv_auc, 4),
             "auc_roc_test": round(auc, 4),
             "f1_test":      round(f1, 4),
         })
-        mlflow.log_artifact(str(eval_path))
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".txt", delete=False, encoding="utf-8", prefix="evaluation_"
+        ) as tmp:
+            tmp.write(eval_content)
+            tmp_path = tmp.name
+        try:
+            mlflow.log_artifact(tmp_path, artifact_path="reports")
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
         mlflow.sklearn.log_model(model, artifact_path="model")
 
-        # Sauvegarde du run_id pour que p06_audit.py continue ce run
         (MODELS_DIR / "mlflow_run_id.txt").write_text(run.info.run_id)
     print(f"MLflow run logged : {run.info.run_id}")
 

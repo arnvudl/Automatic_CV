@@ -8,6 +8,7 @@ Sections :
 """
 
 import joblib
+import tempfile
 import pandas as pd
 import numpy as np
 import shap
@@ -23,7 +24,6 @@ SCALER_PATH      = ROOT / "models" / "scaler.pkl"
 FEAT_COLS_PATH   = ROOT / "models" / "feature_cols.pkl"
 THRESHOLD_PATH   = ROOT / "models" / "threshold.pkl"
 THRESHOLD_JR_PATH= ROOT / "models" / "threshold_junior.pkl"
-REPORTS_DIR      = ROOT / "reports"
 
 TARGET_COL = "label"
 
@@ -74,7 +74,6 @@ def group_stats(y_true, y_pred, label, n):
 
 
 def main():
-    REPORTS_DIR.mkdir(exist_ok=True)
 
     df, target = load_full_data()
     model         = joblib.load(MODEL_PATH)
@@ -158,10 +157,9 @@ def main():
         "  - Aucun attribut protege (genre, age) utilise comme feature du modele",
     ]
 
-    audit_path = REPORTS_DIR / "audit.txt"
-    with open(audit_path, "w", encoding="utf-8") as f:
-        f.write("\n".join(lines))
-    print(f"Audit v2 termine. Rapport : {audit_path}")
+    audit_text = "\n".join(lines)
+    print(audit_text)
+    print("Audit v2 termine.")
 
     # ── MLflow — continue le run d'entraînement si disponible ────
     mlflow.set_experiment("cv-intelligence")
@@ -197,7 +195,16 @@ def main():
         for feat, val in feat_imp.items():
             mlflow.log_metric(f"shap_{feat}", round(float(val), 4))
 
-        mlflow.log_artifact(str(audit_path))
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".txt", delete=False, encoding="utf-8", prefix="audit_"
+        ) as tmp:
+            tmp.write(audit_text)
+            tmp_path = tmp.name
+        try:
+            mlflow.log_artifact(tmp_path, artifact_path="reports")
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+
     print(f"MLflow audit loggé sur run : {saved_run_id or 'nouveau run'}")
 
 
