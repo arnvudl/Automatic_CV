@@ -6,12 +6,15 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/candidates': { target: 'http://localhost:8000', changeOrigin: true },
-      '/stats':      { target: 'http://localhost:8000', changeOrigin: true },
-      '/score':      { target: 'http://localhost:8000', changeOrigin: true },
-      '/comments':   { target: 'http://localhost:8000', changeOrigin: true },
-      '/events':     { target: 'http://localhost:8000', changeOrigin: true,
-                       ws: false },  // SSE — pas WS
+      '/auth':        { target: 'http://localhost:8000', changeOrigin: true },
+      '/candidates':  { target: 'http://localhost:8000', changeOrigin: true },
+      '/jobs':        { target: 'http://localhost:8000', changeOrigin: true },
+      '/interviews':  { target: 'http://localhost:8000', changeOrigin: true },
+      '/stats':       { target: 'http://localhost:8000', changeOrigin: true },
+      '/score':       { target: 'http://localhost:8000', changeOrigin: true },
+      '/comments':    { target: 'http://localhost:8000', changeOrigin: true },
+      '/events':      { target: 'http://localhost:8000', changeOrigin: true,
+                        ws: false },  // SSE — pas WS
     }
   }
 })
