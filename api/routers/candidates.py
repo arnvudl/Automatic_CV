@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Optional
 
 import pandas as pd
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 from sqlalchemy import or_, desc as _desc
 
