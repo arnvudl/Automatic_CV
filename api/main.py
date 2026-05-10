@@ -9,6 +9,7 @@ import logging
 import os
 import uuid
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,7 +30,7 @@ from api.routers import auth as auth_router
 from api.routers import interviews as interviews_router
 
 # Parsing pipeline
-from pipeline_ml.core.p01_parse import parse_cv, parse_cv_llm
+from pipeline_ml.core.p01_parse import parse_cv, parse_cv_llm, extract_text
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("cv_api")
@@ -127,18 +128,33 @@ async def sse_stream():
 # ── POST /score ───────────────────────────────────────────────────────
 @app.post("/score", tags=["scoring"])
 async def score_cv(file: UploadFile = File(...)):
-    """Reçoit un fichier .txt (CV), retourne le score ML. Non protégé (n8n)."""
+    """Reçoit un CV (.txt, .pdf, .docx), retourne le score ML. Non protégé (n8n)."""
     if _model is None:
         raise HTTPException(503, "Modèle non disponible.")
 
-    content = await file.read()
-    try:
-        text = content.decode("utf-8")
-    except UnicodeDecodeError:
-        text = content.decode("latin-1")
+    filename = file.filename or ""
+    suffix   = Path(filename).suffix.lower()
+    content  = await file.read()
+
+    # Extraction texte selon le format — PDF/DOCX passent par extract_text()
+    if suffix in (".pdf", ".docx", ".doc"):
+        tmp_in = PROCESSED_DIR / f"_tmp_{uuid.uuid4().hex}{suffix}"
+        try:
+            tmp_in.write_bytes(content)
+            text = extract_text(tmp_in)
+        finally:
+            tmp_in.unlink(missing_ok=True)
+        if not text.strip():
+            raise HTTPException(422, f"Impossible d'extraire le texte du fichier {filename} "
+                                     "(PDF graphique sans couche texte — OCR requis).")
+    else:
+        try:
+            text = content.decode("utf-8")
+        except UnicodeDecodeError:
+            text = content.decode("latin-1")
 
     try:
-        id_row, feat_row = parse_cv_llm(text, filename=file.filename or "")
+        id_row, feat_row = parse_cv_llm(text, filename=filename)
         logger.info(f"Parsing LLM OK — {id_row.get('name')}")
     except Exception as llm_err:
         logger.warning(f"Parsing LLM échoué ({llm_err}), fallback regex")

@@ -81,6 +81,29 @@ def main():
 
     df, target = load_data()
 
+    n_labeled = len(df)
+    n_pos = int(df[target].sum()) if n_labeled > 0 else 0
+    n_neg = n_labeled - n_pos
+    print(f"Données labellisées : {n_labeled} CVs ({n_pos} invités / {n_neg} rejetés)")
+
+    if n_labeled < 10:
+        print(
+            f"\n[ERREUR] Seulement {n_labeled} CV(s) labellisé(s) — entraînement impossible.\n"
+            "Causes possibles :\n"
+            "  1. Les fichiers data/raw/ n'ont pas 'invite'/'reject' dans leur nom\n"
+            "  2. Pas de champ 'Status:' dans les CVs\n"
+            "  3. data/raw/labels.csv absent ou non aligné avec les noms de fichiers\n"
+            "Solution : relancer p01_parse après avoir vérifié les labels."
+        )
+        return
+
+    if n_pos < 2 or n_neg < 2:
+        print(
+            f"\n[ERREUR] Déséquilibre extrême ({n_pos} positifs / {n_neg} négatifs).\n"
+            "Impossible d'entraîner et d'évaluer avec une seule classe représentée."
+        )
+        return
+
     X = df[V2_FEATURES].fillna(0).values
     y = df[target].astype(int).values
     jr = df["is_junior"].values
@@ -102,8 +125,11 @@ def main():
     X_tr = scaler.fit_transform(X_train)
     X_te = scaler.transform(X_test)
 
-    # ── Grid Search — optimisation sur AUC-ROC, 5-fold stratifié ──
-    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
+    # ── Grid Search — optimisation sur AUC-ROC, folds adaptés au dataset ──
+    n_splits = min(5, int(n_pos), int(n_neg))  # jamais plus de folds que la classe minoritaire
+    if n_splits < 5:
+        print(f"[WARN] n_splits réduit à {n_splits} (classe minoritaire trop petite pour 5-fold)")
+    cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_STATE)
     base_model = LogisticRegression(max_iter=1000, random_state=RANDOM_STATE)
     grid = GridSearchCV(
         base_model,
