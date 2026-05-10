@@ -6,25 +6,24 @@ import os
 from datetime import datetime, timedelta
 from typing import Optional
 
+import bcrypt
 import jwt
-from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 SECRET_KEY  = os.getenv("JWT_SECRET", "luminary-dev-secret-CHANGE-IN-PROD")
 ALGORITHM   = "HS256"
 EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "24"))
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-_bearer     = HTTPBearer()
+_bearer = HTTPBearer()
 
 
 def hash_password(plain: str) -> str:
-    return pwd_context.hash(plain)
+    return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
 
 
 def create_token(data: dict, expire_hours: int = EXPIRE_HOURS) -> str:
