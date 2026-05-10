@@ -57,17 +57,17 @@ def login(body: LoginRequest):
         if not user or not verify_password(body.password, user.password_hash):
             raise HTTPException(401, "Email ou mot de passe incorrect")
 
-    token = create_token({
-        "sub":   user.user_id,
-        "email": user.email,
-        "name":  user.name,
-        "role":  user.role,
-    })
-    return {
-        "access_token": token,
-        "token_type":   "bearer",
-        "user": _user_to_dict(user),
-    }
+        token = create_token({
+            "sub":   user.user_id,
+            "email": user.email,
+            "name":  user.name,
+            "role":  user.role,
+        })
+        return {
+            "access_token": token,
+            "token_type":   "bearer",
+            "user": _user_to_dict(user),
+        }
 
 
 # ── GET /auth/me ──────────────────────────────────────────────────────
