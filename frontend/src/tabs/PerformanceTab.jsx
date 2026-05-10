@@ -55,7 +55,7 @@ export default function PerformanceTab() {
         <KpiCard label="Recall junior" value="55.6%"   sub="après correction barre"    accent="amber" />
         {stats
           ? <KpiCard label="Candidats live" value={stats.total} sub={`${stats.invite_rate}% invités`} accent="purple" />
-          : <KpiCard label="Modèle"         value="v3"          sub="Fairness-Aware"                  accent="purple" />}
+          : <KpiCard label="Modèle"         value="v2"          sub="Fairness-Aware"                  accent="purple" />}
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -71,7 +71,7 @@ export default function PerformanceTab() {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-          <p className="text-xs text-slate-400 text-center mt-1">Écart : 1.3 pts — v5 baseline : 13 pts</p>
+          <p className="text-xs text-slate-400 text-center mt-1">Écart : 1.3 pts — v1 baseline : 13 pts</p>
         </Card>
 
         <Card title="Distribution Invités / Rejetés">

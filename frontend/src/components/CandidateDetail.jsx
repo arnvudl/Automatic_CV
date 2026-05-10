@@ -3,7 +3,7 @@ import { X, Mail, Phone, Briefcase, Globe, FileText, Code, MessageSquare, Send, 
 import { getCountry, getLocationCategory } from '../utils/location'
 
 const EDU_LABELS = { 1: 'Bac ou moins', 2: 'Bachelor', 3: 'Master', 4: 'PhD' }
-const MODEL_VER  = 'v3-Fairness-Aware'
+const MODEL_VER  = 'v2-Fairness-Aware'
 const HR_USER    = 'RH'
 
 function buildTemplate(type, candidate) {

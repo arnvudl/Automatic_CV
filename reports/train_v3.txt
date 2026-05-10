@@ -1,9 +1,9 @@
-RAPPORT ENTRAÎNEMENT V3 — Features Anti-Biais
+RAPPORT ENTRAÎNEMENT V2 — Features Anti-Biais
 ============================================================
 Dataset : 500 CV  |  Train : 400  |  Test : 100
 Positifs test : 20 (20.0%)
 
-── BASELINE v5 ─────────────────────────────────────────────────────
+── BASELINE v1 ─────────────────────────────────────────────────────
   Features (8) : ['years_experience', 'avg_job_duration', 'education_level', 'potential_score', 'junior_potential', 'has_multiple_languages', 'career_depth', 'is_it']
   Seuil adultes : 0.614  |  Seuil juniors : 0.374
   AUC : 0.755
@@ -23,7 +23,7 @@ Positifs test : 20 (20.0%)
     avg_job_duration             0.0654
     junior_potential             0.0572
 
-── MODÈLE v3 (exp_per_year_of_age + field_match) ─────────────────────────────────────────────────────
+── MODÈLE v2 (exp_per_year_of_age + field_match) ─────────────────────────────────────────────────────
   Features (9) : ['exp_per_year_of_age', 'avg_job_duration', 'education_level', 'potential_score', 'junior_potential', 'has_multiple_languages', 'career_depth', 'is_it', 'field_match']
   Seuil adultes : 0.480  |  Seuil juniors : 0.412
   AUC : 0.762
@@ -45,7 +45,7 @@ Positifs test : 20 (20.0%)
     avg_job_duration             0.0107
 
 ── RÉSUMÉ COMPARATIF ─────────────────────────────────────────
-Métrique                              v5 (baseline)  v3 (anti-biais)        Δ
+Métrique                              v1 (baseline)  v2 (anti-biais)        Δ
   AUC global                                  0.755            0.762 +  0.007
   Recall Female                               0.500            0.800 +  0.300
   Recall Male                                 0.800            0.900 +  0.100

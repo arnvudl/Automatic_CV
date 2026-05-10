@@ -76,7 +76,7 @@ export default function OverviewTab({ candidates }) {
             <CheckCircle size={12} className="text-emerald-500" />
             Parsing réussi : <strong className="text-slate-700">{scored > 0 ? Math.round(scored/Math.max(stats.total,1)*100) : 0}%</strong>
             &nbsp;·&nbsp; Score moyen : <strong className="text-slate-700">{Math.round((stats.avg_score||0)*100)}%</strong>
-            &nbsp;·&nbsp; Modèle : <strong className="text-slate-700">v3 Fairness-Aware</strong>
+            &nbsp;·&nbsp; Modèle : <strong className="text-slate-700">v2 Fairness-Aware</strong>
           </div>
         </div>
 

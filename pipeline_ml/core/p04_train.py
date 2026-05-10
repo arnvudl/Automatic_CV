@@ -1,6 +1,6 @@
 """
-p04_train.py — Entraînement v4 (Anti-Biais RRK/GCA)
-Changements vs v3 :
+p04_train.py — Entraînement v2 (Anti-Biais RRK/GCA)
+Changements vs v1 :
   - education_level (SHAP dominant 0.529, biais académique) remplacé par
     education_adj (compressed scale : Bachelor=0.30, Master=0.70)
   - potential_per_year ajouté (GCA proxy — vitesse d'apprentissage junior)
@@ -38,7 +38,7 @@ MODELS_DIR      = ROOT / "models"
 REPORTS_DIR     = ROOT / "reports"
 RANDOM_STATE    = 42
 
-V3_FEATURES = [
+V2_FEATURES = [
     "exp_per_year_of_age", "avg_job_duration", "education_adj",
     "potential_score", "junior_potential", "has_multiple_languages",
     "career_depth", "is_it", "field_match",
@@ -79,7 +79,7 @@ def main():
 
     df, target = load_data()
 
-    X = df[V3_FEATURES].fillna(0).values
+    X = df[V2_FEATURES].fillna(0).values
     y = df[target].astype(int).values
     jr = df["is_junior"].values
 
@@ -137,7 +137,7 @@ def main():
     auc = roc_auc_score(y_test, y_proba_te)
     report = classification_report(y_test, y_pred, target_names=["Rejete", "Invite"])
 
-    print(f"Modele v3 — AUC : {auc:.3f}")
+    print(f"Modele v2 — AUC : {auc:.3f}")
     print(f"Seuil adultes (30+) : {thr_adult:.3f}  |  Seuil juniors (<30) : {thr_junior:.3f}")
     print(report)
 
@@ -147,13 +147,13 @@ def main():
         f.write(f"AUC-ROC CV (5-fold)       : {best_cv_auc:.3f}\n")
         f.write(f"Seuil adultes (30+) : {thr_adult:.3f}\n")
         f.write(f"Seuil juniors (<30) : {thr_junior:.3f}\n")
-        f.write(f"Features : {V3_FEATURES}\n")
+        f.write(f"Features : {V2_FEATURES}\n")
         f.write(f"AUC-ROC test : {auc:.3f}\n\n")
         f.write(report)
 
     joblib.dump(model,       MODELS_DIR / "model.pkl")
     joblib.dump(scaler,      MODELS_DIR / "scaler.pkl")
-    joblib.dump(V3_FEATURES, MODELS_DIR / "feature_cols.pkl")
+    joblib.dump(V2_FEATURES, MODELS_DIR / "feature_cols.pkl")
     joblib.dump(thr_adult,   MODELS_DIR / "threshold.pkl")
     joblib.dump(thr_junior,  MODELS_DIR / "threshold_junior.pkl")
     print(f"Modele sauvegarde dans {MODELS_DIR}")

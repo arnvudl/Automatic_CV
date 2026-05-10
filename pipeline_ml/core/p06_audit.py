@@ -1,10 +1,10 @@
 """
-p06_audit.py — Audit de Biais, Equite & Explicabilite v3
+p06_audit.py — Audit de Biais, Equite & Explicabilite v2
 Sections :
   1. Biais structurels (sampling)
   2. Equite par groupe (genre, age, pays)
   3. Importance des variables (SHAP)
-  4. Analyse genre detaillee (rappel ecart avant/apres v3)
+  4. Analyse genre detaillee (rappel ecart avant/apres v2)
 """
 
 import joblib
@@ -92,7 +92,7 @@ def main():
                       (y_proba >= threshold).astype(int))
 
     lines = [
-        "RAPPORT D'AUDIT FINAL — CV-Intelligence (v3)",
+        "RAPPORT D'AUDIT FINAL — CV-Intelligence (v2)",
         "=" * 60,
         "",
     ]
@@ -151,7 +151,7 @@ def main():
     lines.append("")
     lines += [
         "  Rappel methodologique :",
-        "  - Modele v3 : exp_per_year_of_age remplace years_experience (SHAP v5 : 0.52)",
+        "  - Modele v2 : exp_per_year_of_age remplace years_experience (SHAP v1 : 0.52)",
         "  - Correction structurelle : normalise l'experience par la duree de carriere possible",
         "  - Seuil junior abaisse pour ne pas penaliser les profils < 30 ans",
         "  - Aucun attribut protege (genre, age) utilise comme feature du modele",
@@ -160,7 +160,7 @@ def main():
     audit_path = REPORTS_DIR / "audit.txt"
     with open(audit_path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
-    print(f"Audit v3 termine. Rapport : {audit_path}")
+    print(f"Audit v2 termine. Rapport : {audit_path}")
 
 
 if __name__ == "__main__":

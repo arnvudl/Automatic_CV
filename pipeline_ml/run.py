@@ -1,5 +1,5 @@
 """
-run.py — Pipeline ML Runner v3
+run.py — Pipeline ML Runner v2
 Etapes : p00 exploration → p01 parse → p02 features → p03 analyse → p04 train → p06 audit
 """
 
@@ -31,7 +31,7 @@ def run_dashboard():
 
 def header():
     print(f"\n{SEP}")
-    print("  CV-Intelligence — Pipeline ML v3")
+    print("  CV-Intelligence — Pipeline ML v2")
     print("  TechCore Liege")
     print(SEP)
 
@@ -42,7 +42,7 @@ def run_full():
     steps = [
         (p0.main, "00 - Exploration des donnees brutes"),
         (p1.main, "01 - Parsing CV"),
-        (p2.main, "02 - Feature Engineering v3"),
+        (p2.main, "02 - Feature Engineering v2"),
         (p3.main, "03 - EDA & Analyse Statistique"),
         (p4.main, "04 - Entrainement (Fairness-Aware)"),
         (p6.main, "06 - Audit Biais, Equite & SHAP"),
@@ -58,7 +58,7 @@ def menu():
     options = {
         "0": ("00 - Exploration des donnees brutes",     p0.main),
         "1": ("01 - Parsing CV (Raw -> Features)",       p1.main),
-        "2": ("02 - Feature Engineering v3",             p2.main),
+        "2": ("02 - Feature Engineering v2",             p2.main),
         "3": ("03 - EDA & Analyse Statistique",          p3.main),
         "4": ("04 - Entrainement Fairness-Aware",        p4.main),
         "6": ("06 - Audit Biais, Equite & SHAP",        p6.main),

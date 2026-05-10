@@ -1,5 +1,5 @@
 """
-p03_analysis.py — Exploration de Données (EDA) & Analyse Statistique v3
+p03_analysis.py — Exploration de Données (EDA) & Analyse Statistique v2
 """
 
 import pandas as pd
@@ -12,7 +12,7 @@ from sklearn.preprocessing import StandardScaler
 ROOT      = Path(__file__).parent.parent.parent
 DATA_PATH = ROOT / "data" / "processed" / "features.csv"
 
-V3_FEATURES = [
+V2_FEATURES = [
     "exp_per_year_of_age", "avg_job_duration", "education_level",
     "potential_score", "junior_potential", "has_multiple_languages",
     "career_depth", "is_it", "field_match",
@@ -25,9 +25,9 @@ def load_data():
     df = pd.read_csv(DATA_PATH)
     target = "label" if "label" in df.columns else "passed_next_stage"
     df = df[df[target].notna()].copy()
-    available = [f for f in V3_FEATURES if f in df.columns]
-    if len(available) < len(V3_FEATURES):
-        missing = set(V3_FEATURES) - set(available)
+    available = [f for f in V2_FEATURES if f in df.columns]
+    if len(available) < len(V2_FEATURES):
+        missing = set(V2_FEATURES) - set(available)
         print(f"  [WARN] Features manquantes : {missing}")
     X = df[available].fillna(0)
     y = df[target].astype(int)
@@ -76,7 +76,7 @@ def main():
         print(f"Erreur : {e}")
         return
 
-    print(f"\n--- EDA v3 ({len(X)} lignes, {len(X.columns)} features) ---")
+    print(f"\n--- EDA v2 ({len(X)} lignes, {len(X.columns)} features) ---")
 
     print("\n[1. Outliers (IQR)]")
     out = detect_outliers(X)

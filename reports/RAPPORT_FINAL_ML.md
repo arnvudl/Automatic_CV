@@ -19,7 +19,7 @@ CV-Intelligence est un système de **pré-filtrage automatique** de candidatures
 
 ```
 p01_parse.py      → Parsing des 500 CVs bruts (.txt) → features.csv + identities.csv
-p02_features.py   → Feature engineering v3 (36 colonnes)
+p02_features.py   → Feature engineering v2 (36 colonnes)
 p03_analysis.py   → EDA : outliers, VIF, mutual information
 p04_train.py      → Entraînement + seuils différenciés → model.pkl
 p06_audit.py      → Audit équité (genre, âge, pays) + SHAP
@@ -31,7 +31,7 @@ Régression Logistique avec `C=0.1` (régularisation forte) et `class_weight='ba
 
 ---
 
-## Feature Engineering v3
+## Feature Engineering v2
 
 ### Variables du modèle (9 variables)
 
@@ -47,11 +47,11 @@ Régression Logistique avec `C=0.1` (régularisation forte) et `class_weight='ba
 | `exp_per_year_of_age` | `years_experience / max(age-22, 1)` | 0.057 | Exp. normalisée par durée de carrière possible |
 | `avg_job_duration` | Durée moyenne par poste | 0.034 | Stabilité de carrière |
 
-### Évolution v5 → v3
+### Évolution v1 → v2
 
 La principale évolution est le **remplacement de `years_experience` par `exp_per_year_of_age`**.
 
-| Problème v5 | Solution v3 |
+| Problème v1 | Solution v2 |
 |---|---|
 | `years_experience` : SHAP #1 (0.52), structurellement défavorable aux femmes (pauses carrière) et aux juniors | `exp_per_year_of_age = years_experience / max(age-22, 1)` normalise par la durée de carrière *possible* |
 | `is_finance` : colinéaire avec `is_it` | Supprimée |
@@ -72,11 +72,11 @@ Le modèle applique deux seuils de décision pour ne pas pénaliser les jeunes c
 
 ---
 
-## Métriques de Performance (v3)
+## Métriques de Performance (v2)
 
 ### Sur le dataset complet (500 CV labellisés)
 
-| Métrique | v5 (baseline) | **v3** | Δ |
+| Métrique | v1 (baseline) | **v2** | Δ |
 |---|---|---|---|
 | **ROC-AUC** | 0.785 | **0.797** | +0.012 |
 | Recall global | — | **0.85** | — |
@@ -118,7 +118,7 @@ Le modèle applique deux seuils de décision pour ne pas pénaliser les jeunes c
 
 ---
 
-## Audit d'Équité (v3)
+## Audit d'Équité (v2)
 
 ### Par Genre
 
@@ -128,7 +128,7 @@ Le modèle applique deux seuils de décision pour ne pas pénaliser les jeunes c
 | Hommes | 267 | **0.786** | 0.400 |
 | **Écart** | — | **+1.3 pts** | — |
 
-**Amélioration majeure :** l'écart de recall genre passe de **13 pts (v5) à 1.3 pt (v3)** grâce au remplacement de `years_experience` par `exp_per_year_of_age`. Aucun attribut protégé (genre, âge) n'est utilisé comme feature du modèle.
+**Amélioration majeure :** l'écart de recall genre passe de **13 pts (v1) à 1.3 pt (v2)** grâce au remplacement de `years_experience` par `exp_per_year_of_age`. Aucun attribut protégé (genre, âge) n'est utilisé comme feature du modèle.
 
 ![Équité](plots/fairness_metrics.png)
 
@@ -166,11 +166,11 @@ Le modèle ne voit pas le pays directement. L'écart entre pays (Allemagne 0.917
 
 ## Conclusion
 
-Le modèle v3 (AUC=0.797, 500 CV) remplit son rôle de **pré-filtrage anti-spam** : recall élevé, biais genre quasi-éliminé, pipeline propre en 6 étapes.
+Le modèle v2 (AUC=0.797, 500 CV) remplit son rôle de **pré-filtrage anti-spam** : recall élevé, biais genre quasi-éliminé, pipeline propre en 6 étapes.
 
-### Apports v3 vs v5
+### Apports v2 vs v1
 
-| Axe | v5 | v3 |
+| Axe | v1 | v2 |
 |---|---|---|
 | AUC | 0.785 | **0.797** |
 | Écart genre | 13 pts | **1.3 pts** |

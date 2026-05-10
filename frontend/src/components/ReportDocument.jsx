@@ -63,7 +63,7 @@ export function ReportDocument({ data, start, end }) {
         <View style={S.header}>
           <Text style={S.title}>Rapport d'Analyse IA — CV-Intelligence</Text>
           <Text style={S.subtitle}>
-            LuxTalent Advisory Group · Période : {start} → {end} · Modèle v3 Fairness-Aware
+            LuxTalent Advisory Group · Période : {start} → {end} · Modèle v2 Fairness-Aware
           </Text>
         </View>
 
@@ -152,7 +152,7 @@ export function ReportDocument({ data, start, end }) {
         </View>
 
         <Text style={S.footer}>
-          Généré le {new Date().toLocaleDateString('fr-FR')} · CV-Intelligence v3 Fairness-Aware · LuxTalent Advisory Group
+          Généré le {new Date().toLocaleDateString('fr-FR')} · CV-Intelligence v2 Fairness-Aware · LuxTalent Advisory Group
         </Text>
       </Page>
     </Document>

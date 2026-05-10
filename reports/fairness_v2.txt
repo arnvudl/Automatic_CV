@@ -2,7 +2,7 @@ RAPPORT FAIRNESS V2 — Corrections d'Équité
 ============================================================
 Dataset test : 100 CV  |  Positifs : 20  |  Taux : 20.0%
 
-── BASELINE (v5 — seuils fixes) ──────────────────────────────
+── BASELINE (v1 — seuils fixes) ──────────────────────────────
 Par genre :
   Female                 n= 51  Recall=0.500  Precision=0.333  F1=0.400
   Male                   n= 49  Recall=0.800  Precision=0.444  F1=0.571
@@ -43,7 +43,7 @@ Par âge :
 
 ── RÉSUMÉ COMPARATIF ─────────────────────────────────────────
 Modèle                                     Female R   Male R     Jr R     Jr P
-  Baseline v5                                 0.500    0.800    0.400    0.286
+  Baseline v1                                 0.500    0.800    0.400    0.286
   + Reweighting (étape 1)                     0.500    0.900    0.400    0.286
   + Seuils genre×âge (étape 2)                0.800    0.800    0.400    0.286
   + Junior précision (étape 3)                0.500    0.900    0.400    0.286

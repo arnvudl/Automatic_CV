@@ -89,7 +89,7 @@ def engineer(df: pd.DataFrame) -> pd.DataFrame:
     df["is_it"]      = (sector == "IT").astype(int)
     df["is_finance"] = (sector == "Finance").astype(int)
 
-    # ── Features anti-biais v3 ────────────────────────────────
+    # ── Features anti-biais v2 ────────────────────────────────
     if "age" in df.columns:
         age = pd.to_numeric(df["age"], errors="coerce").fillna(30)
     else:
@@ -146,7 +146,7 @@ def main():
     df_eng.drop(columns=["age"], inplace=True, errors="ignore")
 
     df_eng.to_csv(FEATURES_PATH, index=False)
-    print(f"Features v3 calculées sur {len(df_eng)} CV ({len(df_eng.columns)} colonnes).")
+    print(f"Features v2 calculées sur {len(df_eng)} CV ({len(df_eng.columns)} colonnes).")
     print(f"  exp_per_year_of_age : moy={df_eng['exp_per_year_of_age'].astype(float).mean():.3f}")
     print(f"  field_match         : {df_eng['field_match'].astype(int).mean():.1%} de correspondance")
 
