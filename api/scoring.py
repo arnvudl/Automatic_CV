@@ -110,14 +110,13 @@ def score_features(feat: dict, age: Optional[int]) -> dict:
     X_s = scaler.transform(X)
     score_val = float(model.predict_proba(X_s)[0][1])
 
-    # SHAP individual
+    # SHAP individual — pour un modèle linéaire (LogisticRegression) :
+    # phi_i = coef_i * x_scaled_i  (baseline = moyenne = 0 dans l'espace scalé)
     shap_dict = {}
     try:
-        import shap as _shap
-        explainer = _shap.LinearExplainer(model, X_s, feature_perturbation="interventional")
-        sv = explainer.shap_values(X_s)
-        raw = sv[0] if isinstance(sv, list) else sv[0]
-        shap_dict = {k: round(float(v), 4) for k, v in zip(features, raw)}
+        coef      = model.coef_[0]                        # shape (n_features,)
+        shap_vals = coef * X_s[0]                         # contribution de chaque feature
+        shap_dict = {k: round(float(v), 4) for k, v in zip(features, shap_vals)}
     except Exception:
         pass
 
