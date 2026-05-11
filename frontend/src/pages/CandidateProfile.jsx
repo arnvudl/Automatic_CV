@@ -5,9 +5,9 @@ import { Toast } from '../components/Toast'
 import { InterviewModal } from '../components/InterviewModal'
 
 const AVATAR_COLORS = [
-  'bg-blue-100 text-primary',
-  'bg-secondary-fixed text-secondary',
-  'bg-green-100 text-tertiary',
+  'bg-blue-100 text-blue-700',
+  'bg-violet-100 text-violet-700',
+  'bg-emerald-100 text-emerald-700',
   'bg-purple-100 text-purple-700',
   'bg-amber-100 text-amber-700',
 ]
@@ -18,22 +18,22 @@ function initials(name) {
 
 function getScoreColors(score) {
   const pct = Math.round((score ?? 0) * 100)
-  if (pct >= 75) return { text: 'text-tertiary', bg: 'bg-tertiary/10', bar: '#006b2b', label: 'Top Match' }
-  if (pct >= 50) return { text: 'text-yellow-600', bg: 'bg-yellow-100', bar: '#ca8a04', label: 'Good Match' }
-  return { text: 'text-error', bg: 'bg-error-container', bar: '#ba1a1a', label: 'Low Match' }
+  if (pct >= 75) return { text: 'text-success',     bg: 'bg-success/10',     bar: '#16a34a', label: 'Top Match' }
+  if (pct >= 50) return { text: 'text-warning',     bg: 'bg-warning/10',     bar: '#ca8a04', label: 'Good Match' }
+  return              { text: 'text-destructive', bg: 'bg-destructive/10', bar: '#dc2626', label: 'Low Match' }
 }
 
 function ShapBar({ label, value }) {
-  const abs = Math.abs(value)
-  const width = Math.min((abs / 0.3) * 100, 100)
+  const abs      = Math.abs(value)
+  const width    = Math.min((abs / 0.3) * 100, 100)
   const positive = value >= 0
   return (
     <div className="flex items-center gap-3 text-xs">
-      <span className="w-36 text-on-surface-variant font-medium truncate">{label}</span>
-      <div className="flex-1 h-2 bg-surface-container rounded-full overflow-hidden">
-        <div className={`h-full rounded-full ${positive ? 'bg-tertiary' : 'bg-error'}`} style={{ width: `${width}%` }} />
+      <span className="w-36 text-muted-foreground font-medium truncate">{label}</span>
+      <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+        <div className={`h-full rounded-full ${positive ? 'bg-success' : 'bg-destructive'}`} style={{ width: `${width}%` }} />
       </div>
-      <span className={`w-12 text-right font-bold ${positive ? 'text-tertiary' : 'text-error'}`}>
+      <span className={`w-12 text-right font-bold ${positive ? 'text-success' : 'text-destructive'}`}>
         {positive ? '+' : ''}{value.toFixed(2)}
       </span>
     </div>
@@ -41,11 +41,11 @@ function ShapBar({ label, value }) {
 }
 
 export default function CandidateProfile({ onNavigate, candidateId }) {
-  const [candidate, setCandidate]   = useState(null)
-  const [loading, setLoading]       = useState(true)
-  const [error, setError]           = useState(null)
-  const [updating, setUpdating]     = useState(false)
-  const [toast, setToast]           = useState(null)
+  const [candidate, setCandidate]       = useState(null)
+  const [loading, setLoading]           = useState(true)
+  const [error, setError]               = useState(null)
+  const [updating, setUpdating]         = useState(false)
+  const [toast, setToast]               = useState(null)
   const [showInterview, setShowInterview] = useState(false)
 
   const showToast = useCallback((message, type = 'success') => {
@@ -67,31 +67,32 @@ export default function CandidateProfile({ onNavigate, candidateId }) {
       await updateStatus(candidate.candidate_id, newStatus)
       setCandidate(prev => ({ ...prev, status: newStatus }))
       const messages = {
-        archived:             'Candidat archivé',
-        interview_scheduled:  'Entretien planifié ✓',
-        review:               'Mis en révision',
-        rejected:             'Candidat rejeté',
-        inbox:                'Remis en boîte de réception',
+        archived:            'Candidat archivé',
+        interview_scheduled: 'Entretien planifié ✓',
+        review:              'Mis en révision',
+        rejected:            'Candidat rejeté',
+        inbox:               'Remis en boîte de réception',
       }
       showToast(messages[newStatus] ?? 'Statut mis à jour')
-    } catch (e) {
+    } catch {
       showToast('Erreur lors de la mise à jour', 'error')
+    } finally {
+      setUpdating(false)
     }
-    finally { setUpdating(false) }
   }
 
   if (loading) return (
-    <div className="flex items-center justify-center min-h-[60vh] text-on-surface-variant gap-3">
-      <Icon name="hourglass_empty" size={32} />
+    <div className="flex items-center justify-center min-h-[60vh] text-muted-foreground gap-3">
+      <div className="w-5 h-5 border-2 border-border border-t-foreground rounded-full animate-spin" />
       <span className="font-medium">Chargement...</span>
     </div>
   )
 
   if (error || !candidate) return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-on-surface-variant">
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-muted-foreground">
       <Icon name="person_off" size={48} />
-      <p className="font-bold text-on-surface">{error ?? 'Candidat introuvable'}</p>
-      <button onClick={() => onNavigate('candidates')} className="text-primary font-bold text-sm hover:underline">
+      <p className="font-bold text-foreground">{error ?? 'Candidat introuvable'}</p>
+      <button onClick={() => onNavigate('candidates')} className="text-foreground font-bold text-sm hover:opacity-70 transition-opacity">
         Retour à la liste
       </button>
     </div>
@@ -105,7 +106,11 @@ export default function CandidateProfile({ onNavigate, candidateId }) {
     : '—'
 
   const decisionLabel = { invite: 'Invité', reject: 'Rejeté', eliminated: 'Éliminé' }[candidate.decision] ?? '—'
-  const decisionColor = { invite: 'text-tertiary', reject: 'text-error', eliminated: 'text-on-surface-variant' }[candidate.decision] ?? 'text-on-surface-variant'
+  const decisionColor = {
+    invite:     'text-success',
+    reject:     'text-destructive',
+    eliminated: 'text-muted-foreground',
+  }[candidate.decision] ?? 'text-muted-foreground'
 
   let shapEntries = []
   try {
@@ -135,52 +140,53 @@ export default function CandidateProfile({ onNavigate, candidateId }) {
         <InterviewModal
           candidate={candidate}
           onClose={() => setShowInterview(false)}
-          onConfirm={async ({ date, time, type, notes }) => {
+          onConfirm={async ({ date: d, time, type, notes }) => {
             setShowInterview(false)
             await handleStatus('interview_scheduled')
             try {
               await createInterview({
                 candidate_id:   candidate.candidate_id,
                 candidate_name: candidate.name,
-                date, time, type, notes,
+                date: d, time, type, notes,
               })
-            } catch (_) { /* non bloquant */ }
-            showToast(`Entretien ${type} planifié le ${new Date(date).toLocaleDateString('fr-FR')} à ${time}`)
+            } catch (_) {}
+            showToast(`Entretien ${type} planifié le ${new Date(d).toLocaleDateString('fr-FR')} à ${time}`)
           }}
         />
       )}
-      {/* Breadcrumb */}
+
+      {/* Breadcrumb + Actions */}
       <div className="flex justify-between items-center mb-10">
         <button onClick={() => onNavigate('candidates')}
-          className="flex items-center gap-2 text-on-surface-variant hover:text-on-surface transition-colors text-sm font-medium">
+          className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors text-sm font-medium">
           <Icon name="arrow_back" size={18} />
           Retour aux candidats
         </button>
         <div className="flex gap-3 flex-wrap">
           {candidate.status === 'archived' ? (
             <button onClick={() => handleStatus('inbox')} disabled={updating}
-              className="px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface font-semibold text-sm hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2">
+              className="px-5 py-2 rounded-lg bg-muted text-foreground font-semibold text-sm hover:bg-muted/80 transition-colors disabled:opacity-50 flex items-center gap-2">
               <Icon name="unarchive" size={16} /> Désarchiver
             </button>
           ) : (
             <button onClick={() => handleStatus('archived')} disabled={updating}
-              className="px-6 py-2.5 rounded-full bg-secondary-container text-on-secondary-container font-semibold text-sm hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2">
+              className="px-5 py-2 rounded-lg bg-muted text-foreground font-semibold text-sm hover:bg-muted/80 transition-colors disabled:opacity-50 flex items-center gap-2">
               <Icon name="archive" size={16} /> Archiver
             </button>
           )}
 
           {candidate.status === 'interview_scheduled' ? (
             <button onClick={() => setShowInterview(true)}
-              className="px-8 py-2.5 rounded-full bg-tertiary/10 text-tertiary font-bold text-sm flex items-center gap-2 hover:bg-tertiary/20 transition-colors">
+              className="px-6 py-2 rounded-lg bg-success/10 text-success font-bold text-sm flex items-center gap-2 hover:bg-success/20 transition-colors">
               <Icon name="event_available" size={16} /> Entretien planifié — Modifier
             </button>
           ) : candidate.decision === 'invite' ? (
             <button onClick={() => setShowInterview(true)} disabled={updating}
-              className="px-8 py-2.5 rounded-full bg-gradient-to-r from-primary to-primary-container text-white font-bold text-sm shadow-lg shadow-primary/20 active:scale-95 transition-transform disabled:opacity-50 flex items-center gap-2">
+              className="px-6 py-2 rounded-lg bg-foreground text-primary-foreground font-bold text-sm disabled:opacity-50 flex items-center gap-2 hover:opacity-90 transition-opacity">
               <Icon name="event" size={16} /> Planifier l'entretien
             </button>
           ) : (
-            <div className={`px-8 py-2.5 rounded-full font-bold text-sm ${colors.bg} ${colors.text}`}>
+            <div className={`px-6 py-2 rounded-lg font-bold text-sm ${colors.bg} ${colors.text}`}>
               {decisionLabel}
             </div>
           )}
@@ -190,47 +196,47 @@ export default function CandidateProfile({ onNavigate, candidateId }) {
       <div className="grid grid-cols-12 gap-8">
         {/* Left */}
         <div className="col-span-4 space-y-6">
-          {/* Profile */}
-          <section className="bg-surface-container-lowest rounded-2xl p-8 text-center shadow-ambient">
-            <div className={`w-32 h-32 rounded-full mx-auto mb-6 ${AVATAR_COLORS[0]} flex items-center justify-center text-4xl font-black ring-4 ring-surface-container-low`}>
+          {/* Profile card */}
+          <section className="bg-card border border-border rounded-xl p-8 text-center shadow-card">
+            <div className={`w-24 h-24 rounded-full mx-auto mb-5 ${AVATAR_COLORS[0]} flex items-center justify-center text-3xl font-black ring-4 ring-border`}>
               {ini}
             </div>
-            <h2 className="text-2xl font-extrabold tracking-tight text-on-surface">{candidate.name ?? 'Anonyme'}</h2>
-            <p className="text-primary font-medium">{candidate.target_role ?? candidate.sector ?? '—'}</p>
-            <p className={`text-sm font-bold mt-1 mb-6 ${decisionColor}`}>{decisionLabel}</p>
+            <h2 className="text-xl font-bold text-foreground">{candidate.name ?? 'Anonyme'}</h2>
+            <p className="text-foreground/70 font-medium text-sm mt-0.5">{candidate.target_role ?? candidate.sector ?? '—'}</p>
+            <p className={`text-sm font-bold mt-1 mb-5 ${decisionColor}`}>{decisionLabel}</p>
 
-            <div className="flex justify-center gap-2 mb-6 flex-wrap">
-              {candidate.sector && <span className="px-3 py-1 bg-surface-container rounded-full text-xs font-bold text-on-surface-variant">{candidate.sector}</span>}
-              {candidate.years_experience != null && <span className="px-3 py-1 bg-surface-container rounded-full text-xs font-bold text-on-surface-variant">{candidate.years_experience} ans exp.</span>}
+            <div className="flex justify-center gap-2 mb-5 flex-wrap">
+              {candidate.sector && <span className="px-3 py-1 bg-muted rounded-full text-xs font-semibold text-muted-foreground">{candidate.sector}</span>}
+              {candidate.years_experience != null && <span className="px-3 py-1 bg-muted rounded-full text-xs font-semibold text-muted-foreground">{candidate.years_experience} ans exp.</span>}
             </div>
 
             <div className="space-y-1 text-left">
               {candidate.email && (
                 <a href={`mailto:${candidate.email}?subject=${encodeURIComponent(`Candidature${candidate.target_role ? ' — ' + candidate.target_role : ''} | Luminary ATS`)}&body=${encodeURIComponent(`Bonjour ${candidate.name ?? ''},\n\nNous avons étudié votre candidature avec attention.\n\nCordialement,\nL'équipe RH`)}`}
-                  className="flex items-center gap-3 p-3 rounded-lg hover:bg-surface-container-low transition-colors group">
-                  <span className="text-primary"><Icon name="mail" size={18} /></span>
-                  <span className="text-sm text-on-surface truncate flex-1">{candidate.email}</span>
-                  <span className="text-[10px] font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity">Contacter →</span>
+                  className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted transition-colors group">
+                  <span className="text-foreground"><Icon name="mail" size={16} /></span>
+                  <span className="text-sm text-foreground truncate flex-1">{candidate.email}</span>
+                  <span className="text-[10px] font-bold text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">Contacter →</span>
                 </a>
               )}
               {candidate.phone && (
                 <a href={`tel:${candidate.phone}`}
-                  className="flex items-center gap-3 p-3 rounded-lg hover:bg-surface-container-low transition-colors group">
-                  <span className="text-primary"><Icon name="phone" size={18} /></span>
-                  <span className="text-sm text-on-surface flex-1">{candidate.phone}</span>
-                  <span className="text-[10px] font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity">Appeler →</span>
+                  className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted transition-colors group">
+                  <span className="text-foreground"><Icon name="phone" size={16} /></span>
+                  <span className="text-sm text-foreground flex-1">{candidate.phone}</span>
+                  <span className="text-[10px] font-bold text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">Appeler →</span>
                 </a>
               )}
               <div className="flex items-center gap-3 p-3 rounded-lg">
-                <span className="text-primary"><Icon name="calendar_today" size={18} /></span>
-                <span className="text-sm text-on-surface">Reçu le {date}</span>
+                <span className="text-foreground"><Icon name="calendar_today" size={16} /></span>
+                <span className="text-sm text-foreground">Reçu le {date}</span>
               </div>
             </div>
           </section>
 
-          {/* Score */}
-          <section className="bg-surface-container-low rounded-2xl p-6 shadow-ambient">
-            <h3 className="text-sm font-black text-on-surface uppercase tracking-widest mb-4">Score ML</h3>
+          {/* Score card */}
+          <section className="bg-card border border-border rounded-xl p-6 shadow-card">
+            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4">Score ML</h3>
             <div className="flex items-center gap-4">
               <div className="relative w-20 h-20 flex-shrink-0">
                 <svg className="w-full h-full -rotate-90" viewBox="0 0 80 80">
@@ -244,46 +250,46 @@ export default function CandidateProfile({ onNavigate, candidateId }) {
               </div>
               <div>
                 <p className={`text-xl font-black ${colors.text}`}>{colors.label}</p>
-                <p className="text-xs text-on-surface-variant mt-1">Seuil : {Math.round((candidate.threshold_used ?? 0.5) * 100)}%</p>
+                <p className="text-xs text-muted-foreground mt-1">Seuil : {Math.round((candidate.threshold_used ?? 0.5) * 100)}%</p>
               </div>
             </div>
           </section>
         </div>
 
         {/* Right */}
-        <div className="col-span-8 space-y-8">
-          {/* AI Insights */}
-          <section className="bg-surface-container-lowest rounded-2xl p-8 ai-glow relative overflow-hidden shadow-ambient">
-            <div className="absolute top-0 right-0 p-6">
-              <div className={`flex items-center gap-2 ${colors.bg} px-4 py-2 rounded-full`}>
-                <span className={`w-2 h-2 rounded-full animate-pulse`} style={{ backgroundColor: colors.bar }} />
-                <span className={`${colors.text} font-black text-xs uppercase tracking-tighter`}>{pct}% Match</span>
+        <div className="col-span-8 space-y-6">
+          {/* AI Analysis */}
+          <section className="bg-card border border-border rounded-xl p-8 shadow-card">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <Icon name="auto_awesome" fill size={22} className="text-foreground" />
+                <h3 className="text-lg font-bold text-foreground">Analyse IA</h3>
               </div>
-            </div>
-            <div className="flex items-center gap-3 mb-6">
-              <span className="text-tertiary"><Icon name="auto_awesome" fill size={30} /></span>
-              <h3 className="text-xl font-extrabold text-on-surface">Analyse IA</h3>
+              <div className={`flex items-center gap-2 ${colors.bg} px-3 py-1.5 rounded-full`}>
+                <span className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: colors.bar }} />
+                <span className={`${colors.text} font-bold text-xs uppercase`}>{pct}% Match</span>
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="p-5 bg-surface-container-low rounded-2xl">
-                <p className="text-xs font-bold text-tertiary uppercase mb-2">Décision ML</p>
-                <p className={`text-lg font-bold ${decisionColor}`}>{decisionLabel}</p>
-                <p className="text-xs text-on-surface-variant mt-1">Score {pct}% vs seuil {Math.round((candidate.threshold_used ?? 0.5) * 100)}%</p>
+              <div className="p-4 bg-muted rounded-xl">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Décision ML</p>
+                <p className={`text-base font-bold ${decisionColor}`}>{decisionLabel}</p>
+                <p className="text-xs text-muted-foreground mt-1">Score {pct}% vs seuil {Math.round((candidate.threshold_used ?? 0.5) * 100)}%</p>
               </div>
-              <div className="p-5 bg-surface-container-low rounded-2xl">
-                <p className="text-xs font-bold text-tertiary uppercase mb-2">Expérience</p>
-                <p className="text-lg font-bold text-on-surface">{candidate.years_experience != null ? `${candidate.years_experience} ans` : '—'}</p>
-                <p className="text-xs text-on-surface-variant mt-1">{candidate.sector ?? '—'}</p>
+              <div className="p-4 bg-muted rounded-xl">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Expérience</p>
+                <p className="text-base font-bold text-foreground">{candidate.years_experience != null ? `${candidate.years_experience} ans` : '—'}</p>
+                <p className="text-xs text-muted-foreground mt-1">{candidate.sector ?? '—'}</p>
               </div>
               {candidate.eliminated_reason && (
-                <div className="p-5 bg-error-container rounded-2xl col-span-2">
-                  <p className="text-xs font-bold text-error uppercase mb-2">Raison d'élimination</p>
-                  <p className="text-sm text-on-surface font-medium">{candidate.eliminated_reason}</p>
+                <div className="p-4 bg-destructive/10 rounded-xl col-span-2">
+                  <p className="text-[10px] font-bold text-destructive uppercase tracking-widest mb-2">Raison d'élimination</p>
+                  <p className="text-sm text-foreground font-medium">{candidate.eliminated_reason}</p>
                 </div>
               )}
               {shapEntries.length > 0 && (
-                <div className="p-5 bg-surface-container-low rounded-2xl col-span-2">
-                  <p className="text-xs font-bold text-tertiary uppercase mb-4">Facteurs SHAP (impact sur le score)</p>
+                <div className="p-4 bg-muted rounded-xl col-span-2">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-4">Facteurs SHAP (impact sur le score)</p>
                   <div className="space-y-3">
                     {shapEntries.map(([k, v]) => <ShapBar key={k} label={k} value={v} />)}
                   </div>
@@ -292,14 +298,14 @@ export default function CandidateProfile({ onNavigate, candidateId }) {
             </div>
           </section>
 
-          {/* Infos détaillées */}
-          <section className="bg-surface-container-lowest rounded-2xl p-8 shadow-ambient">
-            <h3 className="text-xl font-extrabold text-on-surface mb-6">Informations du candidat</h3>
+          {/* Informations */}
+          <section className="bg-card border border-border rounded-xl p-8 shadow-card">
+            <h3 className="text-lg font-bold text-foreground mb-5">Informations du candidat</h3>
             <div className="grid grid-cols-2 gap-3">
               {infoFields.map(({ label, value }) => (
-                <div key={label} className="p-4 bg-surface-container-low rounded-xl">
-                  <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">{label}</p>
-                  <p className="text-sm font-semibold text-on-surface">{String(value)}</p>
+                <div key={label} className="p-4 bg-muted rounded-xl">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">{label}</p>
+                  <p className="text-sm font-semibold text-foreground">{String(value)}</p>
                 </div>
               ))}
             </div>

@@ -5,10 +5,10 @@ import { useAuth } from '../contexts/AuthContext'
 const BASE = import.meta.env.VITE_API_URL ?? ''
 
 export default function LoginPage() {
-  const { login }          = useAuth()
-  const [email, setEmail]  = useState('')
-  const [pass,  setPass]   = useState('')
-  const [error, setError]  = useState(null)
+  const { login }            = useAuth()
+  const [email, setEmail]    = useState('')
+  const [pass,  setPass]     = useState('')
+  const [error, setError]    = useState(null)
   const [loading, setLoading] = useState(false)
   const [showPass, setShowPass] = useState(false)
 
@@ -38,97 +38,93 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-surface flex items-center justify-center p-4">
-      {/* Background blur orbs */}
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -left-40 w-96 h-96 bg-primary/10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-secondary/10 rounded-full blur-3xl" />
+        <div className="absolute -top-40 -left-40 w-96 h-96 bg-foreground/5 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-foreground/5 rounded-full blur-3xl" />
       </div>
 
       <div className="w-full max-w-sm relative">
         {/* Logo */}
         <div className="text-center mb-10">
-          <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center text-white shadow-xl shadow-primary/30 mx-auto mb-4">
-            <Icon name="auto_awesome" fill size={32} />
+          <div className="w-14 h-14 bg-foreground rounded-xl flex items-center justify-center text-primary-foreground shadow-card-md mx-auto mb-4">
+            <Icon name="auto_awesome" fill size={28} />
           </div>
-          <h1 className="text-3xl font-black text-primary tracking-tight">Luminary ATS</h1>
-          <p className="text-sm text-on-surface-variant mt-1 font-medium uppercase tracking-widest">Recruitment Suite</p>
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">Luminary ATS</h1>
+          <p className="text-xs text-muted-foreground mt-1 font-medium uppercase tracking-widest">Recruitment Suite</p>
         </div>
 
         {/* Card */}
-        <div className="bg-surface-container-lowest rounded-3xl p-8 shadow-ambient-lg">
-          <h2 className="text-xl font-extrabold text-on-surface mb-1">Connexion</h2>
-          <p className="text-sm text-on-surface-variant mb-8">Accès réservé à l'équipe RH</p>
+        <div className="bg-card border border-border rounded-xl p-8 shadow-card-lg">
+          <h2 className="text-lg font-bold text-foreground mb-1">Connexion</h2>
+          <p className="text-sm text-muted-foreground mb-7">Accès réservé à l'équipe RH</p>
 
           {error && (
-            <div className="mb-5 flex items-center gap-3 p-4 bg-error-container rounded-xl text-error text-sm font-medium">
-              <Icon name="error_outline" size={18} />
+            <div className="mb-5 flex items-center gap-3 p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm font-medium">
+              <Icon name="error_outline" size={16} />
               {error}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Email */}
             <div>
-              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">
+              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-widest mb-2">
                 Email
               </label>
               <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-outline">
-                  <Icon name="mail" size={18} />
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground">
+                  <Icon name="mail" size={16} />
                 </span>
                 <input
                   type="email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   placeholder="vous@entreprise.com"
-                  className="w-full bg-surface-container-low border-none rounded-xl pl-10 pr-4 py-3 text-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/30 transition-all"
+                  className="w-full bg-muted border border-border rounded-lg pl-10 pr-4 py-2.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-foreground/20 transition-all"
                   required
                   autoComplete="email"
                 />
               </div>
             </div>
 
-            {/* Password */}
             <div>
-              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">
+              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-widest mb-2">
                 Mot de passe
               </label>
               <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-outline">
-                  <Icon name="lock" size={18} />
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground">
+                  <Icon name="lock" size={16} />
                 </span>
                 <input
                   type={showPass ? 'text' : 'password'}
                   value={pass}
                   onChange={e => setPass(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full bg-surface-container-low border-none rounded-xl pl-10 pr-12 py-3 text-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/30 transition-all"
+                  className="w-full bg-muted border border-border rounded-lg pl-10 pr-12 py-2.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-foreground/20 transition-all"
                   required
                   autoComplete="current-password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPass(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface transition-colors">
-                  <Icon name={showPass ? 'visibility_off' : 'visibility'} size={18} />
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+                  <Icon name={showPass ? 'visibility_off' : 'visibility'} size={16} />
                 </button>
               </div>
             </div>
 
-            {/* Submit */}
             <button
               type="submit"
               disabled={loading || !email || !pass}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-primary to-primary-container text-white font-bold text-sm shadow-lg shadow-primary/20 hover:shadow-xl active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2 mt-2">
+              className="w-full py-2.5 rounded-lg bg-foreground text-primary-foreground font-bold text-sm hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2 mt-2">
               {loading ? (
                 <>
-                  <Icon name="hourglass_empty" size={18} />
+                  <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
                   Connexion...
                 </>
               ) : (
                 <>
-                  <Icon name="login" size={18} />
+                  <Icon name="login" size={16} />
                   Se connecter
                 </>
               )}
@@ -136,7 +132,7 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <p className="text-center text-xs text-on-surface-variant mt-6 opacity-50">
+        <p className="text-center text-xs text-muted-foreground mt-5 opacity-50">
           Luminary ATS v2.1 · Sécurisé JWT
         </p>
       </div>

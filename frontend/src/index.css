@@ -6,13 +6,57 @@
 @tailwind utilities;
 
 :root {
-  --font-symbols: 'Material Symbols Outlined';
+  --radius: 0.75rem;
+
+  /* Base */
+  --background:   0 0% 96%;
+  --foreground:   224 71% 4%;
+
+  /* Card */
+  --card:         0 0% 100%;
+  --card-foreground: 224 71% 4%;
+
+  /* Primary — near black */
+  --primary:          224 71% 4%;
+  --primary-foreground: 210 20% 98%;
+
+  /* Secondary */
+  --secondary:          220 14% 96%;
+  --secondary-foreground: 220 39% 11%;
+
+  /* Muted */
+  --muted:          220 14% 96%;
+  --muted-foreground: 220 9% 46%;
+
+  /* Accent */
+  --accent:          220 14% 96%;
+  --accent-foreground: 220 39% 11%;
+
+  /* Border / input */
+  --border: 220 13% 91%;
+  --input:  220 13% 91%;
+  --ring:   224 71% 4%;
+
+  /* Status */
+  --destructive:          0 84% 60%;
+  --destructive-foreground: 210 20% 98%;
+  --success:          142 71% 45%;
+  --success-foreground: 0 0% 100%;
+  --warning:          38 92% 50%;
+  --warning-foreground: 0 0% 100%;
+
+  /* Sidebar — dark */
+  --sidebar:          224 71% 4%;
+  --sidebar-foreground: 210 20% 98%;
+  --sidebar-muted:    215 20% 55%;
+  --sidebar-accent:   215 28% 14%;
+  --sidebar-border:   215 28% 10%;
 }
 
 body {
   font-family: 'Inter', system-ui, sans-serif;
-  background-color: #f9f9ff;
-  color: #191b22;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
   -webkit-font-smoothing: antialiased;
 }
 
@@ -38,11 +82,5 @@ body {
 
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(194,198,213,0.6); border-radius: 99px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(114,119,133,0.5); }
-
-@layer components {
-  .ai-glow {
-    box-shadow: 0 0 40px -10px rgba(0, 107, 43, 0.2);
-  }
-}
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }

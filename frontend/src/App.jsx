@@ -12,15 +12,14 @@ import Archives from './pages/Archives'
 import LoginPage from './pages/LoginPage'
 import { Icon } from './components/Icon'
 
-// ── URL ↔ page mapping ───────────────────────────────────────────────
 const ROUTE_MAP = {
-  '/':            'dashboard',
-  '/dashboard':   'dashboard',
-  '/jobs':        'jobs',
-  '/candidates':  'candidates',
-  '/calendar':    'calendar',
-  '/settings':    'settings',
-  '/archives':    'archives',
+  '/':           'dashboard',
+  '/dashboard':  'dashboard',
+  '/jobs':       'jobs',
+  '/candidates': 'candidates',
+  '/calendar':   'calendar',
+  '/settings':   'settings',
+  '/archives':   'archives',
 }
 
 const PAGE_TO_PATH = {
@@ -44,7 +43,6 @@ export default function App() {
   const [page, setPage]               = useState(() => getPageFromPath(window.location.pathname))
   const [candidateId, setCandidateId] = useState(null)
 
-  // Écoute les événements de déconnexion forcée (token expiré)
   useEffect(() => {
     const handler = () => logout()
     window.addEventListener('lony:logout', handler)
@@ -58,7 +56,6 @@ export default function App() {
     setPage(target)
   }
 
-  // Bouton retour navigateur
   useEffect(() => {
     const handler = (e) => {
       const state = e.state
@@ -73,7 +70,6 @@ export default function App() {
     return () => window.removeEventListener('popstate', handler)
   }, [])
 
-  // Alt + flèches
   useEffect(() => {
     const handler = (e) => {
       if (!e.altKey) return
@@ -86,12 +82,11 @@ export default function App() {
     return () => window.removeEventListener('keydown', handler)
   }, [page])
 
-  // Spinner pendant la vérification du token
   if (loading) {
     return (
-      <div className="min-h-screen bg-surface flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4 text-on-surface-variant">
-          <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center text-white animate-pulse">
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4 text-muted-foreground">
+          <div className="w-12 h-12 bg-foreground rounded-xl flex items-center justify-center text-primary-foreground animate-pulse">
             <Icon name="auto_awesome" fill size={24} />
           </div>
           <span className="text-sm font-medium">Chargement...</span>
@@ -100,7 +95,6 @@ export default function App() {
     )
   }
 
-  // Page de connexion si non authentifié
   if (!isAuth) return <LoginPage />
 
   const renderPage = () => {
@@ -119,7 +113,7 @@ export default function App() {
   const sidebarActive = page === 'profile' ? 'candidates' : page
 
   return (
-    <div className="bg-surface text-on-surface antialiased min-h-screen">
+    <div className="bg-background text-foreground antialiased min-h-screen">
       <Sidebar active={sidebarActive} onNavigate={navigate} />
       <div className="ml-64 min-h-screen flex flex-col">
         <TopNav onNavigate={navigate} />

@@ -14,7 +14,7 @@ services:
     ports:
       - "5432:5432"          # exposé pour accès local (pgAdmin, etc.)
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cv_user}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cv_user} -d ${POSTGRES_DB:-cv_intelligence}"]
       interval: 5s
       timeout: 5s
       retries: 5

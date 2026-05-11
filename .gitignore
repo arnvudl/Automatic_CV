@@ -17,3 +17,7 @@ Thumbs.db
 frontend/.vite
 reports
 RECONNEXION.md
+
+# MLflow
+mlruns/
+mlflow.db

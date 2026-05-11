@@ -204,7 +204,7 @@ def test_regex_parsing():
         Master - Computer Science - Université Paris-Saclay - 2018
 
         Experience:
-        Backend Developer - TechCorp - Paris - 2019-01 to 2022-06
+        Backend Developer - TechCorp - Paris - 2016-01 to 2022-06
         Senior Developer - StartupXYZ - Lyon - 2022-07 to present
 
         Skills:
