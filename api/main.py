@@ -29,6 +29,7 @@ from api.routers import candidates, jobs, stats, comments
 from api.routers import auth as auth_router
 from api.routers import interviews as interviews_router
 from api.routers import pipeline as pipeline_router
+from api.routers import scorecards as scorecards_router
 
 # Parsing pipeline
 from pipeline_ml.core.p01_parse import parse_cv, parse_cv_llm, extract_text
@@ -58,6 +59,7 @@ app.include_router(stats.router)                # /stats, /analyse/* — protég
 app.include_router(comments.router)             # /comments/* — protégé
 app.include_router(interviews_router.router)    # /interviews/* — protégé
 app.include_router(pipeline_router.router)      # /jobs/{id}/stages, /candidates/{id}/stage — protégé
+app.include_router(scorecards_router.router)    # /candidates/{id}/scorecards, /scorecards/{id} — protégé
 
 
 # ── Startup ──────────────────────────────────────────────────────────
@@ -65,7 +67,39 @@ app.include_router(pipeline_router.router)      # /jobs/{id}/stages, /candidates
 def startup():
     init_db()
     _seed_admin()
+    _migrate_csv_to_db()
     logger.info("Base de données initialisée.")
+
+
+def _migrate_csv_to_db():
+    """Migration unique : importe les candidats du CSV vers la DB s'ils n'y sont pas déjà."""
+    from api.config import CANDIDATES_FILE
+    from api.database import get_db, Candidate as CandidateModel
+    from api.scoring import save_candidate
+    import pandas as pd
+
+    if not CANDIDATES_FILE.exists():
+        return
+    try:
+        df = pd.read_csv(CANDIDATES_FILE)
+        if df.empty:
+            return
+        with get_db() as db:
+            existing_ids = {r.candidate_id for r in db.query(CandidateModel.candidate_id).all()}
+
+        to_import = df[~df["candidate_id"].isin(existing_ids)]
+        if to_import.empty:
+            return
+
+        for _, row in to_import.iterrows():
+            try:
+                save_candidate(row.dropna().to_dict())
+            except Exception as e:
+                logger.warning(f"Skipping CSV candidate {row.get('candidate_id')}: {e}")
+
+        logger.info(f"{len(to_import)} candidat(s) migrés du CSV vers la DB.")
+    except Exception as e:
+        logger.warning(f"Migration CSV→DB échouée : {e}")
 
 
 def _seed_admin():

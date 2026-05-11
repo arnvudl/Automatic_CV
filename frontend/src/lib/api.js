@@ -111,6 +111,13 @@ export const updateInterview = (id, data) =>
 export const deleteInterview = (id) =>
   request(`/interviews/${id}`, { method: 'DELETE' })
 
+// ── Scorecards ───────────────────────────────────────────────────────
+export const getExplain       = (candidateId) => request(`/candidates/${candidateId}/explain`)
+export const getScorecards    = (candidateId) => request(`/candidates/${candidateId}/scorecards`)
+export const createScorecard  = (candidateId, data) =>
+  request(`/candidates/${candidateId}/scorecards`, { method: 'POST', body: JSON.stringify(data) })
+export const deleteScorecard  = (scorecardId) => request(`/scorecards/${scorecardId}`, { method: 'DELETE' })
+
 // ── Pipeline Kanban ──────────────────────────────────────────────────
 export const getPipelineStages = (jobId) =>
   request(`/jobs/${jobId}/stages`)

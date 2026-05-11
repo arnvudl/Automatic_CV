@@ -154,6 +154,19 @@ class PipelineStage(Base):
     color     = Column(String(16),  nullable=True)
 
 
+# ── Modèle Scorecard ─────────────────────────────────────────────────
+class Scorecard(Base):
+    __tablename__ = "scorecards"
+
+    scorecard_id   = Column(String(64),  primary_key=True, default=lambda: uuid.uuid4().hex)
+    candidate_id   = Column(String(64),  nullable=False, index=True)
+    evaluator_name = Column(String(128), nullable=True)
+    ratings        = Column(Text,        nullable=True)   # JSON {key: 1-5}
+    notes          = Column(Text,        nullable=True)
+    overall        = Column(Float,       nullable=True)   # moyenne calculée
+    created_at     = Column(DateTime,    default=datetime.utcnow)
+
+
 def init_db():
     """Crée les tables et migre les colonnes manquantes."""
     from sqlalchemy import text, inspect as sa_inspect

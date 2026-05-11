@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Icon } from '../components/Icon'
-import { getCandidate, updateStatus, createInterview } from '../lib/api'
+import { getCandidate, updateStatus, createInterview, getExplain } from '../lib/api'
 import { Toast } from '../components/Toast'
 import { InterviewModal } from '../components/InterviewModal'
+import { ScorecardPanel } from '../components/ScorecardPanel'
 
 const AVATAR_COLORS = [
   'bg-blue-100 text-blue-700',
@@ -40,6 +41,22 @@ function ShapBar({ label, value }) {
   )
 }
 
+// ── Chip de compétence ────────────────────────────────────────────────
+function SkillChip({ label, variant = 'default' }) {
+  const styles = {
+    default: 'bg-muted text-muted-foreground',
+    tech:    'bg-blue-50 text-blue-700 border border-blue-100',
+    meth:    'bg-violet-50 text-violet-700 border border-violet-100',
+    mgmt:    'bg-amber-50 text-amber-700 border border-amber-100',
+    lang:    'bg-emerald-50 text-emerald-700 border border-emerald-100',
+  }
+  return (
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold ${styles[variant]}`}>
+      {label}
+    </span>
+  )
+}
+
 export default function CandidateProfile({ onNavigate, candidateId }) {
   const [candidate, setCandidate]       = useState(null)
   const [loading, setLoading]           = useState(true)
@@ -47,6 +64,9 @@ export default function CandidateProfile({ onNavigate, candidateId }) {
   const [updating, setUpdating]         = useState(false)
   const [toast, setToast]               = useState(null)
   const [showInterview, setShowInterview] = useState(false)
+  const [explain, setExplain]           = useState(null)
+  const [loadingExplain, setLoadingExplain] = useState(false)
+  const [showExplain, setShowExplain]   = useState(false)
 
   const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type })
@@ -59,6 +79,21 @@ export default function CandidateProfile({ onNavigate, candidateId }) {
       .catch(() => setError('Candidat introuvable'))
       .finally(() => setLoading(false))
   }, [candidateId])
+
+  const handleExplain = async () => {
+    if (explain) { setShowExplain(v => !v); return }
+    setLoadingExplain(true)
+    setShowExplain(true)
+    try {
+      const data = await getExplain(candidateId)
+      setExplain(data)
+    } catch {
+      showToast('Explication SHAP indisponible', 'error')
+      setShowExplain(false)
+    } finally {
+      setLoadingExplain(false)
+    }
+  }
 
   const handleStatus = async (newStatus) => {
     if (!candidate || updating) return
@@ -258,21 +293,23 @@ export default function CandidateProfile({ onNavigate, candidateId }) {
 
         {/* Right */}
         <div className="col-span-8 space-y-6">
-          {/* AI Analysis */}
+
+          {/* Score ML + Décision */}
           <section className="bg-card border border-border rounded-xl p-8 shadow-card">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 <Icon name="auto_awesome" fill size={22} className="text-foreground" />
-                <h3 className="text-lg font-bold text-foreground">Analyse IA</h3>
+                <h3 className="text-lg font-bold text-foreground">Score ML</h3>
               </div>
               <div className={`flex items-center gap-2 ${colors.bg} px-3 py-1.5 rounded-full`}>
                 <span className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: colors.bar }} />
                 <span className={`${colors.text} font-bold text-xs uppercase`}>{pct}% Match</span>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+
+            <div className="grid grid-cols-2 gap-4 mb-4">
               <div className="p-4 bg-muted rounded-xl">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Décision ML</p>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Décision</p>
                 <p className={`text-base font-bold ${decisionColor}`}>{decisionLabel}</p>
                 <p className="text-xs text-muted-foreground mt-1">Score {pct}% vs seuil {Math.round((candidate.threshold_used ?? 0.5) * 100)}%</p>
               </div>
@@ -287,22 +324,147 @@ export default function CandidateProfile({ onNavigate, candidateId }) {
                   <p className="text-sm text-foreground font-medium">{candidate.eliminated_reason}</p>
                 </div>
               )}
-              {shapEntries.length > 0 && (
-                <div className="p-4 bg-muted rounded-xl col-span-2">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-4">Facteurs SHAP (impact sur le score)</p>
-                  <div className="space-y-3">
-                    {shapEntries.map(([k, v]) => <ShapBar key={k} label={k} value={v} />)}
+            </div>
+
+            {/* Bouton explication SHAP */}
+            <button
+              onClick={handleExplain}
+              className="flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Icon name={showExplain ? 'expand_less' : 'expand_more'} size={18} />
+              {showExplain ? 'Masquer' : 'Voir'} l'explication détaillée des facteurs
+            </button>
+
+            {showExplain && (
+              <div className="mt-4 border-t border-border pt-4">
+                {loadingExplain ? (
+                  <div className="flex items-center gap-2 text-muted-foreground py-2">
+                    <div className="w-4 h-4 border-2 border-border border-t-foreground rounded-full animate-spin" />
+                    <span className="text-sm">Calcul en cours…</span>
+                  </div>
+                ) : explain ? (
+                  <div className="space-y-4">
+                    {/* Narrative */}
+                    {explain.narrative && (
+                      <p className="text-sm text-muted-foreground leading-relaxed bg-muted rounded-xl px-4 py-3">
+                        {explain.narrative}
+                      </p>
+                    )}
+                    {/* Barres SHAP */}
+                    {explain.shap && Object.keys(explain.shap).length > 0 ? (
+                      <div>
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3">Impact des facteurs sur le score</p>
+                        <div className="space-y-3">
+                          {Object.entries(explain.shap)
+                            .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
+                            .slice(0, 8)
+                            .map(([k, v]) => <ShapBar key={k} label={k} value={v} />)}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground italic">
+                        Données SHAP non disponibles — elles apparaissent uniquement pour les CVs scorés via le pipeline ML.
+                      </p>
+                    )}
+                    {/* Facteurs manquants */}
+                    {explain.missing?.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3">Points à améliorer vs candidats invités</p>
+                        <div className="space-y-2">
+                          {explain.missing.map(m => (
+                            <div key={m.feature} className="flex items-center justify-between bg-destructive/5 rounded-lg px-3 py-2">
+                              <span className="text-xs font-semibold text-foreground">{m.feature}</span>
+                              <span className="text-xs text-destructive font-bold">−{m.gap_pct}% vs moyenne</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </section>
+
+          {/* Compétences & Profil CV */}
+          {(candidate.summary || candidate.skills_tech?.length > 0 || candidate.skills_meth?.length > 0 ||
+            candidate.skills_mgmt?.length > 0 || candidate.languages?.length > 0 || candidate.certifications?.length > 0) && (
+            <section className="bg-card border border-border rounded-xl p-8 shadow-card">
+              <h3 className="text-lg font-bold text-foreground mb-5">Compétences & Profil</h3>
+
+              {candidate.summary && (
+                <div className="mb-5">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Résumé</p>
+                  <p className="text-sm text-foreground leading-relaxed">{candidate.summary}</p>
+                </div>
+              )}
+
+              {candidate.skills_tech?.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Compétences techniques</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {candidate.skills_tech.map(s => <SkillChip key={s} label={s} variant="tech" />)}
                   </div>
                 </div>
               )}
-            </div>
-          </section>
+
+              {candidate.skills_meth?.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Méthodes & outils</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {candidate.skills_meth.map(s => <SkillChip key={s} label={s} variant="meth" />)}
+                  </div>
+                </div>
+              )}
+
+              {candidate.skills_mgmt?.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Management & soft skills</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {candidate.skills_mgmt.map(s => <SkillChip key={s} label={s} variant="mgmt" />)}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                {candidate.languages?.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Langues</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {candidate.languages.map(l => <SkillChip key={l} label={l} variant="lang" />)}
+                    </div>
+                  </div>
+                )}
+                {candidate.certifications?.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Certifications</p>
+                    <ul className="space-y-1">
+                      {candidate.certifications.map(c => (
+                        <li key={c} className="text-xs text-foreground flex items-start gap-1.5">
+                          <Icon name="verified" size={13} className="text-success mt-0.5 flex-shrink-0" />
+                          {c}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
 
           {/* Informations */}
           <section className="bg-card border border-border rounded-xl p-8 shadow-card">
-            <h3 className="text-lg font-bold text-foreground mb-5">Informations du candidat</h3>
+            <h3 className="text-lg font-bold text-foreground mb-5">Informations de contact</h3>
             <div className="grid grid-cols-2 gap-3">
-              {infoFields.map(({ label, value }) => (
+              {[
+                { label: 'Email',        value: candidate.email },
+                { label: 'Téléphone',    value: candidate.phone },
+                { label: 'Secteur',      value: candidate.sector },
+                { label: 'Rôle cible',   value: candidate.target_role },
+                { label: 'Expérience',   value: candidate.years_experience != null ? `${candidate.years_experience} ans` : null },
+                { label: 'Statut',       value: candidate.status },
+                { label: 'Reçu le',      value: date },
+              ].filter(f => f.value != null).map(({ label, value }) => (
                 <div key={label} className="p-4 bg-muted rounded-xl">
                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">{label}</p>
                   <p className="text-sm font-semibold text-foreground">{String(value)}</p>
@@ -310,6 +472,9 @@ export default function CandidateProfile({ onNavigate, candidateId }) {
               ))}
             </div>
           </section>
+
+          {/* Évaluation RH */}
+          <ScorecardPanel candidateId={candidateId} />
         </div>
       </div>
     </div>

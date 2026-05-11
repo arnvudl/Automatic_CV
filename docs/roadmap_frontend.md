@@ -41,7 +41,7 @@ Le proxy Vite redirige automatiquement `/auth`, `/candidates`, `/jobs`, `/interv
 
 ---
 
-## Phase 1 — Pipeline Kanban *(priorité absolue)*
+## Phase 1 — Pipeline Kanban ✅ *(terminé)*
 
 **Pourquoi :** C'est le cœur d'un ATS. Sans pipeline visuel, le produit n'est qu'une liste de candidats.
 

@@ -85,6 +85,8 @@ def list_candidates(
     limit:     int           = Query(200),
     q:         Optional[str] = Query(None, description="recherche nom / email / rôle"),
 ):
+    db_rows = []
+    db_ids  = set()
     try:
         with get_db() as db:
             qry = db.query(CandidateModel)
@@ -104,24 +106,39 @@ def list_candidates(
                 ))
             qry = qry.filter(CandidateModel.score >= min_score)
             rows = qry.order_by(_desc(CandidateModel.score)).limit(limit).all()
-            if rows:
-                return [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]
+            db_rows = [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]
+            db_ids  = {r["candidate_id"] for r in db_rows}
     except Exception as db_err:
         logger.warning(f"DB read failed ({db_err}), CSV fallback")
 
-    # CSV fallback
-    if not CANDIDATES_FILE.exists():
-        return []
-    df = pd.read_csv(CANDIDATES_FILE)
-    if decision:
-        df = df[df["decision"] == decision]
-    if sector:
-        df = df[df["sector"].str.lower() == sector.lower()]
-    if status and "status" in df.columns:
-        df = df[df["status"] == status]
-    df = df[pd.to_numeric(df["score"], errors="coerce").fillna(0) >= min_score]
-    df = df.sort_values("score", ascending=False).head(limit)
-    return df.fillna("").to_dict(orient="records")
+    # Fusion avec le CSV — candidats absents de la DB
+    csv_rows = []
+    if CANDIDATES_FILE.exists():
+        try:
+            df = pd.read_csv(CANDIDATES_FILE, on_bad_lines='skip')
+            if decision:
+                df = df[df["decision"] == decision]
+            if sector:
+                df = df[df["sector"].str.lower() == sector.lower()]
+            if status and "status" in df.columns:
+                df = df[df["status"] == status]
+            if q:
+                mask = (
+                    df["name"].str.contains(q, case=False, na=False) |
+                    df.get("target_role", pd.Series(dtype=str)).str.contains(q, case=False, na=False) |
+                    df.get("sector",      pd.Series(dtype=str)).str.contains(q, case=False, na=False)
+                )
+                df = df[mask]
+            df = df[pd.to_numeric(df["score"], errors="coerce").fillna(0) >= min_score]
+            # Exclure ceux déjà en DB
+            df = df[~df["candidate_id"].isin(db_ids)]
+            csv_rows = df.fillna("").to_dict(orient="records")
+        except Exception as csv_err:
+            logger.warning(f"CSV read failed: {csv_err}")
+
+    merged = db_rows + csv_rows
+    merged.sort(key=lambda r: float(r.get("score") or 0), reverse=True)
+    return merged[:limit]
 
 
 # ── GET /candidates/{id} ─────────────────────────────────────────────
@@ -141,7 +158,7 @@ def get_candidate(candidate_id: str):
     # CSV fallback
     if not CANDIDATES_FILE.exists():
         raise HTTPException(404, "Aucun candidat enregistré.")
-    df = pd.read_csv(CANDIDATES_FILE)
+    df = pd.read_csv(CANDIDATES_FILE, on_bad_lines='skip')
     row = df[df["candidate_id"] == candidate_id]
     if row.empty:
         raise HTTPException(404, f"Candidat {candidate_id} introuvable.")
@@ -173,7 +190,7 @@ async def update_candidate_status(candidate_id: str, body: StatusUpdate):
 
     if CANDIDATES_FILE.exists():
         try:
-            df = pd.read_csv(CANDIDATES_FILE)
+            df = pd.read_csv(CANDIDATES_FILE, on_bad_lines='skip')
             if candidate_id in df["candidate_id"].values:
                 if "status" not in df.columns:
                     df["status"] = "inbox"
@@ -205,7 +222,7 @@ async def delete_candidate(candidate_id: str):
 
     if CANDIDATES_FILE.exists():
         try:
-            df = pd.read_csv(CANDIDATES_FILE)
+            df = pd.read_csv(CANDIDATES_FILE, on_bad_lines='skip')
             if candidate_id in df["candidate_id"].values:
                 df = df[df["candidate_id"] != candidate_id]
                 df.to_csv(CANDIDATES_FILE, index=False)
@@ -224,33 +241,70 @@ async def delete_candidate(candidate_id: str):
 @router.get("/candidates/{candidate_id}/explain")
 def explain_candidate(candidate_id: str):
     import json
-    if not CANDIDATES_FILE.exists():
-        raise HTTPException(404, "Aucun candidat enregistré.")
-    df = pd.read_csv(CANDIDATES_FILE)
-    row = df[df["candidate_id"] == candidate_id]
-    if row.empty:
-        raise HTTPException(404, f"Candidat {candidate_id} introuvable.")
-    r = row.iloc[0]
+
+    # ── Candidat depuis la DB ────────────────────────────────────────
+    candidate_data = None
     try:
-        sv = json.loads(r.get("shap_json") or "{}")
+        with get_db() as db:
+            obj = db.get(CandidateModel, candidate_id)
+            if obj:
+                candidate_data = {c.name: getattr(obj, c.name) for c in obj.__table__.columns}
+    except Exception as e:
+        logger.warning(f"DB explain lookup failed: {e}")
+
+    # Fallback CSV robuste (on_bad_lines='skip' ignore les lignes corrompues)
+    if candidate_data is None:
+        if not CANDIDATES_FILE.exists():
+            raise HTTPException(404, "Aucun candidat enregistré.")
+        try:
+            df_all = pd.read_csv(CANDIDATES_FILE, on_bad_lines='skip')
+            row = df_all[df_all["candidate_id"] == candidate_id]
+            if row.empty:
+                raise HTTPException(404, f"Candidat {candidate_id} introuvable.")
+            candidate_data = row.iloc[0].to_dict()
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, f"Erreur lecture CSV : {e}")
+
+    try:
+        sv = json.loads(candidate_data.get("shap_json") or "{}")
     except Exception:
         sv = {}
-    score = float(r.get("score") or 0)
-    thr   = float(r.get("threshold_used") or 0.5)
+    score = float(candidate_data.get("score") or 0)
+    thr   = float(candidate_data.get("threshold_used") or 0.5)
 
-    invited   = df[df["decision"] == "invite"]
-    feat_cols = [c for c in FEATURE_LABELS if c in df.columns]
-    missing   = []
-    for c in feat_cols:
-        candidate_val = float(pd.to_numeric(r.get(c), errors="coerce") or 0)
-        invited_avg   = float(pd.to_numeric(invited[c], errors="coerce").mean() or 0)
-        if invited_avg > 0 and candidate_val < invited_avg * 0.7:
-            missing.append({
-                "feature":         FEATURE_LABELS.get(c, c),
-                "candidate_value": round(candidate_val, 3),
-                "invited_avg":     round(invited_avg, 3),
-                "gap_pct":         round((invited_avg - candidate_val) / invited_avg * 100, 1),
-            })
+    # Calcul des facteurs manquants
+    # Seules education_level et years_experience sont en DB ; les autres features
+    # (exp_per_year_of_age, etc.) sont des features ML non stockées → on les ignore
+    DB_FEATURES = {
+        "education_level":   FEATURE_LABELS.get("education_level",   "Niveau études"),
+        "years_experience":  FEATURE_LABELS.get("years_experience",  "Expérience"),
+    }
+    missing = []
+    try:
+        with get_db() as db:
+            invited_rows = db.query(CandidateModel).filter(CandidateModel.decision == "invite").all()
+            if invited_rows:
+                for feat_key, feat_label in DB_FEATURES.items():
+                    candidate_val = float(candidate_data.get(feat_key) or 0)
+                    invited_vals  = [
+                        float(getattr(r, feat_key))
+                        for r in invited_rows
+                        if getattr(r, feat_key, None) is not None
+                    ]
+                    if not invited_vals:
+                        continue
+                    invited_avg = sum(invited_vals) / len(invited_vals)
+                    if invited_avg > 0 and candidate_val < invited_avg * 0.7:
+                        missing.append({
+                            "feature":         feat_label,
+                            "candidate_value": round(candidate_val, 3),
+                            "invited_avg":     round(invited_avg, 3),
+                            "gap_pct":         round((invited_avg - candidate_val) / invited_avg * 100, 1),
+                        })
+    except Exception as e:
+        logger.warning(f"Missing factors computation failed: {e}")
 
     from api.routers.stats import shap_narrative
     labeled_shap = {FEATURE_LABELS.get(k, k): v for k, v in sv.items()}
@@ -278,7 +332,7 @@ def semantic_analysis(candidate_id: str):
 
     context_snippet = ""
     if CANDIDATES_FILE.exists():
-        df = pd.read_csv(CANDIDATES_FILE)
+        df = pd.read_csv(CANDIDATES_FILE, on_bad_lines='skip')
         row = df[df["candidate_id"] == candidate_id]
         if not row.empty:
             r = row.iloc[0]
