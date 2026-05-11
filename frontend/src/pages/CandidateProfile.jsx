@@ -452,6 +452,55 @@ export default function CandidateProfile({ onNavigate, candidateId }) {
             </section>
           )}
 
+          {/* Parcours professionnel */}
+          {(candidate.jobs?.length > 0 || candidate.education?.length > 0) && (
+            <section className="bg-card border border-border rounded-xl p-8 shadow-card">
+              <h3 className="text-lg font-bold text-foreground mb-5">Parcours professionnel</h3>
+
+              {candidate.jobs?.length > 0 && (
+                <div className="mb-5">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3">Expériences</p>
+                  <div className="space-y-2">
+                    {candidate.jobs.map((j, i) => (
+                      <div key={i} className="flex items-start gap-3 p-3 bg-muted rounded-xl">
+                        <div className="w-8 h-8 rounded-lg bg-card border border-border flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <Icon name="work" size={15} className="text-muted-foreground" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-foreground leading-tight">{j.title || '—'}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{j.company || '—'}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {candidate.education?.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3">Formation</p>
+                  <div className="space-y-2">
+                    {candidate.education.map((e, i) => (
+                      <div key={i} className="flex items-start gap-3 p-3 bg-muted rounded-xl">
+                        <div className="w-8 h-8 rounded-lg bg-card border border-border flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <Icon name="school" size={15} className="text-muted-foreground" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-foreground leading-tight">
+                            {[e.diploma, e.field].filter(Boolean).join(' — ') || '—'}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {[e.institution, e.year].filter(Boolean).join(' · ')}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
           {/* Informations */}
           <section className="bg-card border border-border rounded-xl p-8 shadow-card">
             <h3 className="text-lg font-bold text-foreground mb-5">Informations de contact</h3>

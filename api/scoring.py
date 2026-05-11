@@ -189,8 +189,12 @@ def save_candidate(record: dict):
             existing = db.get(CandidateModel, record["candidate_id"])
             if existing:
                 for k, v in record.items():
-                    if hasattr(existing, k):
+                    if hasattr(existing, k) and k != "cv_extra_json":
                         setattr(existing, k, v)
+                # Only overwrite cv_extra_json if new value is non-empty
+                new_extra = record.get("cv_extra_json")
+                if new_extra and new_extra not in ("{}", "null", ""):
+                    existing.cv_extra_json = new_extra
             else:
                 received = record.get("received_at")
                 if isinstance(received, str):
@@ -218,6 +222,7 @@ def save_candidate(record: dict):
                     eliminated_reason=record.get("eliminated_reason"),
                     shap_json=record.get("shap_json"),
                     status=record.get("status", "inbox"),
+                    cv_extra_json=record.get("cv_extra_json"),
                 )
                 db.add(obj)
     except Exception as db_err:

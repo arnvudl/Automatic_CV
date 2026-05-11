@@ -73,6 +73,9 @@ class Candidate(Base):
     # Pipeline Kanban
     stage_id          = Column(String(64),  nullable=True)   # étape courante (réf PipelineStage.stage_id)
 
+    # Données CV enrichies (skills, langues, certifs, résumé)
+    cv_extra_json     = Column(Text,        nullable=True)   # JSON: {summary, skills_tech, skills_meth, skills_mgmt, languages, certifications}
+
     __table_args__ = (
         Index("ix_candidates_decision_score", "decision", "score"),
     )
@@ -180,3 +183,5 @@ def init_db():
     with engine.begin() as conn:
         if "stage_id" not in existing:
             conn.execute(text("ALTER TABLE candidates ADD COLUMN stage_id VARCHAR(64)"))
+        if "cv_extra_json" not in existing:
+            conn.execute(text("ALTER TABLE candidates ADD COLUMN cv_extra_json TEXT"))

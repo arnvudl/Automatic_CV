@@ -68,7 +68,52 @@ def startup():
     init_db()
     _seed_admin()
     _migrate_csv_to_db()
+    _recompute_shap()
     logger.info("Base de données initialisée.")
+
+
+def _recompute_shap():
+    """Recalcule le SHAP pour les candidats en DB qui ont shap_json vide ou '{}'."""
+    from api.database import get_db, Candidate as CandidateModel
+    from api.scoring import score_features, enrich_features
+
+    try:
+        with get_db() as db:
+            candidates = db.query(CandidateModel).filter(
+                (CandidateModel.shap_json == None) |
+                (CandidateModel.shap_json == "{}") |
+                (CandidateModel.shap_json == "")
+            ).all()
+
+            if not candidates:
+                return
+
+            updated = 0
+            for c in candidates:
+                if c.score is None:
+                    continue
+                try:
+                    feat_row = {
+                        "years_experience": float(c.years_experience or 0),
+                        "education_level":  float(c.education_level  or 0),
+                        "sector":           c.sector or "",
+                        "target_role":      c.target_role or "",
+                        "avg_job_duration": 0,   # non stocké, approximation
+                        "career_depth":     0,
+                    }
+                    feat_row   = enrich_features(feat_row, c.age)
+                    result     = score_features(feat_row, c.age)
+                    shap_json  = result.get("shap_json", "{}")
+                    if shap_json and shap_json != "{}":
+                        c.shap_json = shap_json
+                        updated += 1
+                except Exception:
+                    pass
+
+            if updated:
+                logger.info(f"SHAP recomputed pour {updated} candidat(s).")
+    except Exception as e:
+        logger.warning(f"SHAP recomputation failed: {e}")
 
 
 def _migrate_csv_to_db():
@@ -189,9 +234,13 @@ async def score_cv(file: UploadFile = File(...)):
         except UnicodeDecodeError:
             text = content.decode("latin-1")
 
+    import json as _json
+
+    cv_extra = {}
     try:
         id_row, feat_row = parse_cv_llm(text, filename=filename)
         logger.info(f"Parsing LLM OK — {id_row.get('name')}")
+        cv_extra = id_row.pop("_cv_extra", {}) or {}
     except Exception as llm_err:
         logger.warning(f"Parsing LLM échoué ({llm_err}), fallback regex")
         tmp = PROCESSED_DIR / f"_tmp_{uuid.uuid4().hex}.txt"
@@ -208,6 +257,14 @@ async def score_cv(file: UploadFile = File(...)):
     candidate_id = id_row["cv_id"]
     (RAW_TEXTS_DIR / f"{candidate_id}.txt").write_text(text, encoding="utf-8")
 
+    # Si le LLM n'a pas fourni les données enrichies, on les parse depuis le texte brut
+    if not cv_extra:
+        from api.routers.candidates import _parse_cv_detail
+        try:
+            cv_extra = _parse_cv_detail(file.filename or "", candidate_id) or {}
+        except Exception:
+            cv_extra = {}
+
     record = {
         "candidate_id":    candidate_id,
         "received_at":     datetime.now().isoformat(),
@@ -215,7 +272,8 @@ async def score_cv(file: UploadFile = File(...)):
         **{k: id_row.get(k) for k in ["name", "email", "phone", "gender", "age"]},
         **{k: feat_row.get(k) for k in ["sector", "target_role", "years_experience", "education_level"]},
         **result,
-        "status": "inbox",
+        "status":        "inbox",
+        "cv_extra_json": _json.dumps(cv_extra, ensure_ascii=False) if cv_extra else None,
     }
     save_candidate(record)
     logger.info(

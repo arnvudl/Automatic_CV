@@ -30,16 +30,30 @@ _RE_LANG_BLK = _re.compile(r"Languages:(.*?)(?:Certifications:|$)", _re.DOTALL |
 _RE_CERT_BLK = _re.compile(r"Certifications:(.*?)$", _re.DOTALL | _re.IGNORECASE)
 
 
-def _parse_cv_detail(source_filename: str) -> dict:
-    """Lit le CV brut et extrait résumé, skills, langues, certifs."""
-    candidates_paths = (
-        list(RAW_DIR.glob(f"{source_filename}")) +
-        list(RAW_DIR.glob(f"{source_filename}.txt")) +
-        list(RAW_DIR.glob(f"*{source_filename.replace('.txt','')}*.txt"))
-    )
-    if not candidates_paths:
+def _parse_cv_detail(source_filename: str, candidate_id: str = "") -> dict:
+    """Lit le CV brut et extrait résumé, skills, langues, certifs.
+    Cherche d'abord dans RAW_TEXTS_DIR/{candidate_id}.txt (texte extrait au scoring),
+    puis dans RAW_DIR par source_filename (fichiers bruts originaux)."""
+    text = ""
+
+    # 1. RAW_TEXTS_DIR/{candidate_id}.txt — source principale
+    if candidate_id:
+        p = RAW_TEXTS_DIR / f"{candidate_id}.txt"
+        if p.exists():
+            text = p.read_text(encoding="utf-8", errors="replace")
+
+    # 2. RAW_DIR par source_filename — fallback
+    if not text and source_filename:
+        candidates_paths = (
+            list(RAW_DIR.glob(source_filename)) +
+            list(RAW_DIR.glob(f"{source_filename}.txt")) +
+            list(RAW_DIR.glob(f"*{source_filename.replace('.txt', '')}*.txt"))
+        )
+        if candidates_paths:
+            text = candidates_paths[0].read_text(encoding="utf-8", errors="replace")
+
+    if not text:
         return {}
-    text = candidates_paths[0].read_text(encoding="utf-8", errors="replace")
 
     summary_m = _RE_SUMMARY.search(text)
     summary   = summary_m.group(1).strip() if summary_m else ""
@@ -144,14 +158,57 @@ def list_candidates(
 # ── GET /candidates/{id} ─────────────────────────────────────────────
 @router.get("/candidates/{candidate_id}")
 def get_candidate(candidate_id: str):
+    import json as _json
+
+    def _expand_cv_extra(data: dict) -> dict:
+        """
+        Extrait cv_extra_json de la DB et l'injecte à plat dans data.
+        Si cv_extra_json est vide, tente un parse depuis les fichiers bruts
+        et sauvegarde le résultat en DB pour les prochaines requêtes.
+        """
+        cv_extra_raw = data.get("cv_extra_json")
+        cv_extra = {}
+
+        if cv_extra_raw and cv_extra_raw not in ("{}", "null", ""):
+            try:
+                cv_extra = _json.loads(cv_extra_raw)
+            except Exception:
+                pass
+
+        if not cv_extra:
+            # Fallback : parse depuis les fichiers bruts (une seule fois)
+            cv_extra = _parse_cv_detail(
+                str(data.get("source_filename", "")), candidate_id
+            )
+            # Sauvegarde en DB pour éviter de relire le fichier la prochaine fois
+            if cv_extra:
+                try:
+                    with get_db() as db2:
+                        obj2 = db2.get(CandidateModel, candidate_id)
+                        if obj2 and not obj2.cv_extra_json:
+                            obj2.cv_extra_json = _json.dumps(cv_extra, ensure_ascii=False)
+                except Exception:
+                    pass
+
+        return {
+            **data,
+            "summary":        cv_extra.get("summary", ""),
+            "skills_tech":    cv_extra.get("skills_tech", []),
+            "skills_meth":    cv_extra.get("skills_meth", []),
+            "skills_mgmt":    cv_extra.get("skills_mgmt", []),
+            "languages":      cv_extra.get("languages", []),
+            "certifications": cv_extra.get("certifications", []),
+            "jobs":           cv_extra.get("jobs", []),
+            "education":      cv_extra.get("education", []),
+        }
+
     # DB first
     try:
         with get_db() as db:
             obj = db.get(CandidateModel, candidate_id)
             if obj:
                 data = {c.name: getattr(obj, c.name) for c in obj.__table__.columns}
-                detail = _parse_cv_detail(str(data.get("source_filename", "")))
-                return {**data, **detail}
+                return _expand_cv_extra(data)
     except Exception as db_err:
         logger.warning(f"DB read failed for candidate {candidate_id}: {db_err}")
 
@@ -163,7 +220,7 @@ def get_candidate(candidate_id: str):
     if row.empty:
         raise HTTPException(404, f"Candidat {candidate_id} introuvable.")
     data = row.iloc[0].fillna("").to_dict()
-    detail = _parse_cv_detail(str(data.get("source_filename", "")))
+    detail = _parse_cv_detail(str(data.get("source_filename", "")), candidate_id)
     return {**data, **detail}
 
 

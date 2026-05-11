@@ -506,6 +506,31 @@ def parse_cv_llm(text: str, labels_dict: dict = None, filename: str = "") -> tup
         "phone":           phone,
         "gender":          gender,
         "age":             age,
+        # Données enrichies pour stockage DB (cv_extra_json)
+        "_cv_extra": {
+            "summary": "",
+            "skills_tech":    skills.get("technical")  or [],
+            "skills_meth":    skills.get("methods")    or [],
+            "skills_mgmt":    skills.get("management") or [],
+            "languages":      [
+                f"{l.get('name', '')} ({l.get('level', '')})" for l in langs
+                if l.get("name")
+            ],
+            "certifications": data.get("certifications") or [],
+            "jobs":           [
+                {"title": j.get("title", ""), "company": j.get("company", "")}
+                for j in parsed_jobs
+            ],
+            "education":      [
+                {
+                    "diploma":     e.get("diploma", ""),
+                    "field":       e.get("field", ""),
+                    "institution": e.get("institution", ""),
+                    "year":        e.get("year"),
+                }
+                for e in edu_list
+            ],
+        },
     }
 
     feature_row = {
