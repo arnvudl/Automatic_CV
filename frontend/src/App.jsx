@@ -9,6 +9,7 @@ import CandidateProfile from './pages/CandidateProfile'
 import Calendar from './pages/Calendar'
 import Settings from './pages/Settings'
 import Archives from './pages/Archives'
+import Pipeline from './pages/Pipeline'
 import LoginPage from './pages/LoginPage'
 import { Icon } from './components/Icon'
 
@@ -16,6 +17,7 @@ const ROUTE_MAP = {
   '/':           'dashboard',
   '/dashboard':  'dashboard',
   '/jobs':       'jobs',
+  '/pipeline':   'pipeline',
   '/candidates': 'candidates',
   '/calendar':   'calendar',
   '/settings':   'settings',
@@ -25,6 +27,7 @@ const ROUTE_MAP = {
 const PAGE_TO_PATH = {
   dashboard:  '/dashboard',
   jobs:       '/jobs',
+  pipeline:   '/pipeline',
   candidates: '/candidates',
   profile:    '/candidates',
   calendar:   '/calendar',
@@ -32,7 +35,7 @@ const PAGE_TO_PATH = {
   archives:   '/archives',
 }
 
-const NAV_PAGES = ['dashboard', 'jobs', 'candidates', 'archives', 'calendar', 'settings']
+const NAV_PAGES = ['dashboard', 'jobs', 'pipeline', 'candidates', 'archives', 'calendar', 'settings']
 
 function getPageFromPath(path) {
   return ROUTE_MAP[path] ?? 'dashboard'
@@ -101,6 +104,7 @@ export default function App() {
     switch (page) {
       case 'dashboard':  return <Dashboard onNavigate={navigate} />
       case 'jobs':       return <Jobs onNavigate={navigate} />
+      case 'pipeline':   return <Pipeline onNavigate={navigate} />
       case 'candidates': return <CandidateList onNavigate={navigate} />
       case 'profile':    return <CandidateProfile onNavigate={navigate} candidateId={candidateId} />
       case 'calendar':   return <Calendar onNavigate={navigate} />

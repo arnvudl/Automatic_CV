@@ -28,6 +28,7 @@ from api.auth import hash_password
 from api.routers import candidates, jobs, stats, comments
 from api.routers import auth as auth_router
 from api.routers import interviews as interviews_router
+from api.routers import pipeline as pipeline_router
 
 # Parsing pipeline
 from pipeline_ml.core.p01_parse import parse_cv, parse_cv_llm, extract_text
@@ -56,6 +57,7 @@ app.include_router(jobs.router)                 # /jobs/* — protégé
 app.include_router(stats.router)                # /stats, /analyse/* — protégé
 app.include_router(comments.router)             # /comments/* — protégé
 app.include_router(interviews_router.router)    # /interviews/* — protégé
+app.include_router(pipeline_router.router)      # /jobs/{id}/stages, /candidates/{id}/stage — protégé
 
 
 # ── Startup ──────────────────────────────────────────────────────────

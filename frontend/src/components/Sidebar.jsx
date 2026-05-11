@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 const MAIN_NAV = [
   { id: 'dashboard',  label: 'Tableau de bord', icon: 'dashboard' },
   { id: 'jobs',       label: "Offres d'emploi", icon: 'work_outline' },
+  { id: 'pipeline',   label: 'Pipeline',         icon: 'view_kanban' },
   { id: 'candidates', label: 'Candidats',        icon: 'group' },
   { id: 'archives',   label: 'Archives',         icon: 'inventory_2' },
   { id: 'calendar',   label: 'Entretiens',       icon: 'calendar_today' },

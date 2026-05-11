@@ -70,6 +70,9 @@ class Candidate(Base):
     # Workflow RH
     status            = Column(String(32),  default="inbox", index=True)
 
+    # Pipeline Kanban
+    stage_id          = Column(String(64),  nullable=True)   # étape courante (réf PipelineStage.stage_id)
+
     __table_args__ = (
         Index("ix_candidates_decision_score", "decision", "score"),
     )
@@ -140,6 +143,27 @@ class Interview(Base):
     updated_at     = Column(DateTime,    nullable=True)
 
 
+# ── Modèle PipelineStage ─────────────────────────────────────────────
+class PipelineStage(Base):
+    __tablename__ = "pipeline_stages"
+
+    stage_id  = Column(String(64),  primary_key=True)
+    job_id    = Column(String(64),  nullable=False, index=True)
+    name      = Column(String(128), nullable=False)
+    position  = Column(Integer,     nullable=False, default=0)
+    color     = Column(String(16),  nullable=True)
+
+
 def init_db():
-    """Crée les tables si elles n'existent pas encore."""
+    """Crée les tables et migre les colonnes manquantes."""
+    from sqlalchemy import text, inspect as sa_inspect
+
     Base.metadata.create_all(bind=engine)
+
+    # Migration douce : ajoute les colonnes manquantes sur les tables existantes
+    inspector = sa_inspect(engine)
+    existing  = {c["name"] for c in inspector.get_columns("candidates")}
+
+    with engine.begin() as conn:
+        if "stage_id" not in existing:
+            conn.execute(text("ALTER TABLE candidates ADD COLUMN stage_id VARCHAR(64)"))

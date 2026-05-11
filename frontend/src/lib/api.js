@@ -110,3 +110,16 @@ export const updateInterview = (id, data) =>
   request(`/interviews/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
 export const deleteInterview = (id) =>
   request(`/interviews/${id}`, { method: 'DELETE' })
+
+// ── Pipeline Kanban ──────────────────────────────────────────────────
+export const getPipelineStages = (jobId) =>
+  request(`/jobs/${jobId}/stages`)
+
+export const createPipelineStage = (jobId, data) =>
+  request(`/jobs/${jobId}/stages`, { method: 'POST', body: JSON.stringify(data) })
+
+export const moveCandidateStage = (candidateId, stageId) =>
+  request(`/candidates/${candidateId}/stage`, {
+    method: 'PATCH',
+    body: JSON.stringify({ stage_id: stageId }),
+  })
