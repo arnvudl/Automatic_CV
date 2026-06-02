@@ -141,7 +141,8 @@
   .node.active {
     border-color: var(--accent);
     box-shadow: var(--glow);
-    animation: node-pulse 2s ease-in-out infinite;
+    /* reveal first, then pulse — ne pas écraser reveal avec node-pulse seul */
+    animation: reveal .5s ease forwards, node-pulse 2s .55s ease-in-out infinite;
   }
   @keyframes node-pulse {
     0%,100%{ box-shadow: var(--glow); }
@@ -811,28 +812,16 @@ decision = <span class="str">"invite"</span> <span class="kw">if</span> score >=
 
 <!-- Démarrer les animations au scroll -->
 <script>
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(e => {
-      if (e.isIntersecting) {
-        e.target.style.animationPlayState = 'running'
-      }
-    })
-  }, { threshold: 0.1 })
-
-  document.querySelectorAll('.node').forEach(n => {
-    n.style.animationPlayState = 'paused'
-    observer.observe(n)
-  })
-
-  // Re-trigger meter fills on scroll
+  // Re-trigger meter fills quand la section entre dans le viewport
   const meterObs = new IntersectionObserver((entries) => {
     entries.forEach(e => {
       if (e.isIntersecting) {
         e.target.querySelectorAll('.meter-fill').forEach(f => {
           f.style.animation = 'none'
-          f.offsetHeight // reflow
+          void f.offsetHeight // force reflow
           f.style.animation = ''
         })
+        meterObs.unobserve(e.target)
       }
     })
   }, { threshold: 0.3 })
