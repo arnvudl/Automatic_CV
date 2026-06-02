@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Luminary ATS — Pipeline ML End-to-End</title>
+<style>
+  :root {
+    --bg:       #0a0a0f;
+    --surface:  #12121a;
+    --card:     #1a1a26;
+    --border:   #2a2a3d;
+    --accent:   #6366f1;
+    --accent2:  #8b5cf6;
+    --success:  #22c55e;
+    --warning:  #f59e0b;
+    --danger:   #ef4444;
+    --text:     #e2e8f0;
+    --muted:    #64748b;
+    --glow:     0 0 24px rgba(99,102,241,0.35);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Background grid ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(99,102,241,.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(99,102,241,.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+  }
+
+  /* ── Header ── */
+  header {
+    text-align: center;
+    padding: 52px 24px 36px;
+    position: relative;
+  }
+  .logo-pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(99,102,241,.12);
+    border: 1px solid rgba(99,102,241,.3);
+    border-radius: 999px;
+    padding: 6px 16px; font-size: 12px; font-weight: 700;
+    color: #a5b4fc; letter-spacing: .08em; text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+  .logo-pill .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent); animation: pulse-dot 2s infinite;
+  }
+  @keyframes pulse-dot {
+    0%,100%{ opacity:1; transform:scale(1); }
+    50%{ opacity:.5; transform:scale(1.5); }
+  }
+  h1 {
+    font-size: clamp(1.8rem, 4vw, 3rem);
+    font-weight: 800; letter-spacing: -.02em;
+    background: linear-gradient(135deg, #e0e7ff 0%, #a5b4fc 50%, #8b5cf6 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1.15; margin-bottom: 12px;
+  }
+  .subtitle {
+    color: var(--muted); font-size: .95rem; font-weight: 400;
+    max-width: 560px; margin: 0 auto;
+  }
+
+  /* ── Pipeline container ── */
+  .pipeline {
+    max-width: 1100px; margin: 0 auto;
+    padding: 0 24px 80px;
+    display: flex; flex-direction: column; gap: 0;
+  }
+
+  /* ── Stage groups ── */
+  .stage-group {
+    display: grid; grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  /* ── Connector ── */
+  .connector {
+    display: flex; justify-content: center; align-items: center;
+    height: 56px; position: relative;
+  }
+  .connector-line {
+    width: 2px; height: 100%;
+    background: linear-gradient(to bottom, var(--border), var(--accent), var(--border));
+    position: relative; overflow: visible;
+  }
+  .connector-line::after {
+    content: '';
+    position: absolute; bottom: -1px; left: 50%; transform: translateX(-50%);
+    width: 0; height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 8px solid var(--accent);
+  }
+  .connector-packet {
+    position: absolute;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+    left: 50%; transform: translateX(-50%);
+    animation: travel 1.8s ease-in-out infinite;
+  }
+  @keyframes travel {
+    0%   { top: 0;    opacity: 0; }
+    10%  { opacity: 1; }
+    90%  { opacity: 1; }
+    100% { top: 100%; opacity: 0; }
+  }
+
+  /* ── Node card ── */
+  .node {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px 32px;
+    position: relative;
+    transition: border-color .3s, box-shadow .3s, transform .3s;
+    cursor: default;
+  }
+  .node:hover {
+    border-color: var(--accent);
+    box-shadow: var(--glow);
+    transform: translateY(-2px);
+  }
+  .node.active {
+    border-color: var(--accent);
+    box-shadow: var(--glow);
+    animation: node-pulse 2s ease-in-out infinite;
+  }
+  @keyframes node-pulse {
+    0%,100%{ box-shadow: var(--glow); }
+    50%{ box-shadow: 0 0 40px rgba(99,102,241,.55); }
+  }
+
+  .node-header {
+    display: flex; align-items: center; gap: 14px; margin-bottom: 16px;
+  }
+  .node-icon {
+    width: 44px; height: 44px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; flex-shrink: 0;
+  }
+  .node-step {
+    font-size: 10px; font-weight: 700; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--muted); display: block;
+  }
+  .node-title {
+    font-size: 1.05rem; font-weight: 700; color: var(--text);
+    line-height: 1.2;
+  }
+
+  .node-body {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  }
+  .node-body.single { grid-template-columns: 1fr; }
+  .node-body.triple { grid-template-columns: 1fr 1fr 1fr; }
+
+  .info-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .info-block-label {
+    font-size: 9px; font-weight: 700; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 6px;
+  }
+  .info-block-value {
+    font-size: .8rem; color: var(--text); font-weight: 500; line-height: 1.5;
+  }
+
+  /* ── Code snippet ── */
+  .code-block {
+    background: #0d0d16;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-size: .73rem;
+    line-height: 1.7;
+    overflow-x: auto;
+  }
+  .code-block .kw  { color: #c084fc; }
+  .code-block .fn  { color: #60a5fa; }
+  .code-block .str { color: #86efac; }
+  .code-block .cm  { color: #475569; }
+  .code-block .nm  { color: #fbbf24; }
+
+  /* ── Badges ── */
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 999px;
+    font-size: 10px; font-weight: 700; letter-spacing: .04em;
+  }
+  .badge-blue   { background: rgba(99,102,241,.15); color: #a5b4fc; border: 1px solid rgba(99,102,241,.3); }
+  .badge-green  { background: rgba(34,197,94,.12);  color: #86efac; border: 1px solid rgba(34,197,94,.25); }
+  .badge-purple { background: rgba(139,92,246,.12); color: #c4b5fd; border: 1px solid rgba(139,92,246,.25); }
+  .badge-amber  { background: rgba(245,158,11,.12); color: #fcd34d; border: 1px solid rgba(245,158,11,.25); }
+  .badge-red    { background: rgba(239,68,68,.12);  color: #fca5a5; border: 1px solid rgba(239,68,68,.25); }
+
+  /* ── Icon colors per step ── */
+  .icon-blue   { background: rgba(99,102,241,.15); }
+  .icon-purple { background: rgba(139,92,246,.15); }
+  .icon-green  { background: rgba(34,197,94,.12); }
+  .icon-amber  { background: rgba(245,158,11,.12); }
+  .icon-pink   { background: rgba(236,72,153,.12); }
+  .icon-cyan   { background: rgba(6,182,212,.12); }
+  .icon-red    { background: rgba(239,68,68,.12); }
+
+  /* ── Parallel split ── */
+  .parallel-container {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  }
+  .parallel-label {
+    display: flex; align-items: center; gap: 10px;
+    color: var(--muted); font-size: 11px; font-weight: 700;
+    letter-spacing: .08em; text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .parallel-label::before, .parallel-label::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+
+  /* ── Data flow tags ── */
+  .data-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .tag {
+    font-size: 10px; font-weight: 600;
+    padding: 2px 9px; border-radius: 6px;
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .tag.highlight { color: #a5b4fc; border-color: rgba(99,102,241,.35); }
+
+  /* ── Score meter ── */
+  .score-meter {
+    display: flex; align-items: center; gap: 12px;
+  }
+  .meter-bar {
+    flex: 1; height: 6px; background: var(--border); border-radius: 999px; overflow: hidden;
+  }
+  .meter-fill {
+    height: 100%; border-radius: 999px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    animation: fill-in 1.5s ease-out forwards;
+    width: 0%;
+  }
+  @keyframes fill-in { to { width: var(--target-width); } }
+
+  /* ── Output cards ── */
+  .output-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+    margin-top: 4px;
+  }
+  .output-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px;
+    text-align: center;
+    transition: border-color .25s, transform .25s;
+  }
+  .output-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .output-card .oc-icon { font-size: 22px; margin-bottom: 6px; }
+  .output-card .oc-label { font-size: .7rem; font-weight: 700; color: var(--text); }
+  .output-card .oc-sub { font-size: .65rem; color: var(--muted); margin-top: 2px; }
+
+  /* ── Animated data packet demo ── */
+  .demo-bar {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px;
+    display: flex; align-items: center; gap: 10px; overflow: hidden;
+  }
+  .demo-label { font-size: .72rem; color: var(--muted); white-space: nowrap; }
+  .demo-track { flex: 1; height: 4px; background: var(--border); border-radius: 999px; position: relative; overflow: hidden; }
+  .demo-track::after {
+    content: '';
+    position: absolute; top: 0; left: -40%; width: 40%; height: 100%;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    animation: scan 2s linear infinite;
+  }
+  @keyframes scan { to { left: 140%; } }
+  .demo-val { font-size: .72rem; font-weight: 700; color: #a5b4fc; }
+
+  /* ── Reveal animation ── */
+  .node { opacity: 0; animation: reveal .5s ease forwards; }
+  .node:nth-child(1)  { animation-delay: .1s; }
+  .parallel-container .node:nth-child(1) { animation-delay: .15s; }
+  .parallel-container .node:nth-child(2) { animation-delay: .3s; }
+  @keyframes reveal {
+    from { opacity:0; transform: translateY(20px); }
+    to   { opacity:1; transform: translateY(0); }
+  }
+
+  /* ── Footer ── */
+  footer {
+    text-align: center; padding: 24px; color: var(--muted);
+    font-size: .75rem; border-top: 1px solid var(--border);
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 700px) {
+    .node-body { grid-template-columns: 1fr; }
+    .node-body.triple { grid-template-columns: 1fr 1fr; }
+    .parallel-container { grid-template-columns: 1fr; }
+    .output-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-pill"><span class="dot"></span> Luminary ATS — Architecture</div>
+  <h1>Pipeline ML End-to-End</h1>
+  <p class="subtitle">De la réception du CV à la décision RH — flux de données complet avec scoring, stockage et interface</p>
+</header>
+
+<div class="pipeline">
+
+  <!-- ── STEP 1 : Entrée CV ── -->
+  <div class="node" style="animation-delay:.05s">
+    <div class="node-header">
+      <div class="node-icon icon-blue">📥</div>
+      <div>
+        <span class="node-step">Étape 1</span>
+        <span class="node-title">Réception du CV</span>
+      </div>
+      <div style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap">
+        <span class="badge badge-blue">n8n webhook</span>
+        <span class="badge badge-purple">API directe</span>
+      </div>
+    </div>
+    <div class="node-body triple">
+      <div class="info-block">
+        <div class="info-block-label">Formats acceptés</div>
+        <div class="data-tags">
+          <span class="tag highlight">.pdf</span>
+          <span class="tag highlight">.docx</span>
+          <span class="tag highlight">.txt</span>
+        </div>
+      </div>
+      <div class="info-block">
+        <div class="info-block-label">Endpoint</div>
+        <div class="code-block" style="padding:8px 10px">
+          <span class="kw">POST</span> <span class="str">/score</span><br>
+          <span class="kw">POST</span> <span class="str">/api/v1/candidates</span>
+        </div>
+      </div>
+      <div class="info-block">
+        <div class="info-block-label">Taille limite</div>
+        <div class="info-block-value">~12 000 tokens<br>transmis au LLM</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector"><div class="connector-line"><div class="connector-packet"></div></div></div>
+
+  <!-- ── STEP 2 : Extraction texte ── -->
+  <div class="node" style="animation-delay:.15s">
+    <div class="node-header">
+      <div class="node-icon icon-cyan">📄</div>
+      <div>
+        <span class="node-step">Étape 2</span>
+        <span class="node-title">Extraction de texte</span>
+      </div>
+      <span class="badge badge-blue" style="margin-left:auto">extract_text()</span>
+    </div>
+    <div class="node-body triple">
+      <div class="info-block">
+        <div class="info-block-label">PDF → pdfplumber</div>
+        <div class="info-block-value">Extraction couche texte native. Détection PDF graphique → avertissement OCR.</div>
+      </div>
+      <div class="info-block">
+        <div class="info-block-label">DOCX → python-docx</div>
+        <div class="info-block-value">Lecture des paragraphes Word, jointure en plain-text UTF-8.</div>
+      </div>
+      <div class="info-block">
+        <div class="info-block-label">TXT → passthrough</div>
+        <div class="info-block-value">Décodage UTF-8 avec fallback latin-1 pour les CVs anciens.</div>
+      </div>
+    </div>
+    <div style="margin-top:12px">
+      <div class="demo-bar">
+        <span class="demo-label">Extraction en cours</span>
+        <div class="demo-track"></div>
+        <span class="demo-val">plain-text →</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector"><div class="connector-line"><div class="connector-packet" style="animation-delay:.4s"></div></div></div>
+
+  <!-- ── STEP 3 : Parsing LLM ── -->
+  <div class="node active" style="animation-delay:.25s">
+    <div class="node-header">
+      <div class="node-icon icon-purple">🧠</div>
+      <div>
+        <span class="node-step">Étape 3 — Cœur du système</span>
+        <span class="node-title">Parsing LLM via Groq</span>
+      </div>
+      <div style="margin-left:auto; display:flex; gap:8px">
+        <span class="badge badge-purple">llama-3.3-70b</span>
+        <span class="badge badge-green">~800ms</span>
+      </div>
+    </div>
+    <div class="node-body">
+      <div>
+        <div class="code-block">
+<span class="cm"># parse_cv_llm(text, filename) → (id_row, feat_row)</span>
+{
+  <span class="str">"name"</span>:        <span class="nm">"Jean Dupont"</span>,
+  <span class="str">"target_role"</span>: <span class="nm">"Data Engineer"</span>,
+  <span class="str">"education"</span>:   [{ <span class="str">"diploma"</span>: <span class="nm">"Master"</span>, <span class="str">"field"</span>: <span class="nm">"CS"</span> }],
+  <span class="str">"jobs"</span>:        [{ <span class="str">"title"</span>: <span class="nm">"Analyst"</span>, <span class="str">"company"</span>: <span class="nm">"KPMG"</span> }],
+  <span class="str">"skills"</span>:      { <span class="str">"technical"</span>: [<span class="nm">"Python"</span>, <span class="nm">"SQL"</span>], ... },
+  <span class="str">"languages"</span>:   [{ <span class="str">"name"</span>: <span class="nm">"English"</span>, <span class="str">"level"</span>: <span class="nm">"C1"</span> }],
+  <span class="str">"certifications"</span>: [<span class="nm">"AWS Certified"</span>]
+}
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div class="info-block">
+          <div class="info-block-label">Fallback regex</div>
+          <div class="info-block-value">Si Groq échoue → <code style="color:#a5b4fc">parse_cv()</code> regex sur CVs structurés</div>
+        </div>
+        <div class="info-block">
+          <div class="info-block-label">Données extraites →</div>
+          <div class="data-tags">
+            <span class="tag highlight">identité</span>
+            <span class="tag highlight">expérience</span>
+            <span class="tag highlight">formation</span>
+            <span class="tag highlight">skills</span>
+            <span class="tag highlight">langues</span>
+            <span class="tag highlight">certifs</span>
+          </div>
+        </div>
+        <div class="info-block">
+          <div class="info-block-label">Stockage brut</div>
+          <div class="info-block-value"><code style="color:#86efac">RAW_TEXTS_DIR/{id}.txt</code> sauvegardé pour audit</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector"><div class="connector-line"><div class="connector-packet" style="animation-delay:.6s"></div></div></div>
+
+  <!-- ── STEP 4 : Feature Engineering ── -->
+  <div class="node" style="animation-delay:.35s">
+    <div class="node-header">
+      <div class="node-icon icon-amber">⚙️</div>
+      <div>
+        <span class="node-step">Étape 4</span>
+        <span class="node-title">Feature Engineering v4</span>
+      </div>
+      <span class="badge badge-amber" style="margin-left:auto">enrich_features()</span>
+    </div>
+    <div class="node-body triple">
+      <div class="info-block">
+        <div class="info-block-label">Features temporelles</div>
+        <div class="data-tags">
+          <span class="tag">log_years_exp</span>
+          <span class="tag">log_avg_job_duration</span>
+          <span class="tag">career_depth</span>
+          <span class="tag">exp_per_year_of_age</span>
+        </div>
+      </div>
+      <div class="info-block">
+        <div class="info-block-label">Features de potentiel</div>
+        <div class="data-tags">
+          <span class="tag">potential_score</span>
+          <span class="tag">junior_potential</span>
+          <span class="tag">cert_density</span>
+          <span class="tag">tech_per_year</span>
+        </div>
+      </div>
+      <div class="info-block">
+        <div class="info-block-label">Features contextuelles</div>
+        <div class="data-tags">
+          <span class="tag">is_it</span>
+          <span class="tag">is_finance</span>
+          <span class="tag">field_match</span>
+          <span class="tag">education_adj</span>
+          <span class="tag">multilingual_score</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector"><div class="connector-line"><div class="connector-packet" style="animation-delay:.3s"></div></div></div>
+
+  <!-- ── STEP 5 : Critères éliminatoires ── -->
+  <div class="node" style="animation-delay:.4s">
+    <div class="node-header">
+      <div class="node-icon icon-red">🚫</div>
+      <div>
+        <span class="node-step">Étape 5 — Pré-filtre</span>
+        <span class="node-title">Critères éliminatoires</span>
+      </div>
+      <span class="badge badge-red" style="margin-left:auto">check_eliminatory()</span>
+    </div>
+    <div class="node-body">
+      <div class="info-block">
+        <div class="info-block-label">Règles configurables (JSON)</div>
+        <div class="code-block" style="margin-top:6px">
+{ <span class="str">"rules"</span>: [{
+    <span class="str">"field"</span>: <span class="nm">"years_experience"</span>,
+    <span class="str">"operator"</span>: <span class="nm">"gte"</span>, <span class="str">"value"</span>: <span class="nm">2</span>,
+    <span class="str">"reason"</span>: <span class="nm">"Expérience insuffisante"</span>,
+    <span class="str">"enabled"</span>: <span class="kw">true</span>
+}]}
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div class="info-block">
+          <div class="info-block-label">Si éliminé</div>
+          <div class="info-block-value">→ <span style="color:#fca5a5;font-weight:700">decision: "eliminated"</span><br>score = 0, raison stockée</div>
+        </div>
+        <div class="info-block">
+          <div class="info-block-label">Si OK</div>
+          <div class="info-block-value">→ passage au modèle ML</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector"><div class="connector-line"><div class="connector-packet" style="animation-delay:.7s"></div></div></div>
+
+  <!-- ── STEP 6 : ML Scoring ── -->
+  <div class="node" style="animation-delay:.45s">
+    <div class="node-header">
+      <div class="node-icon icon-green">🎯</div>
+      <div>
+        <span class="node-step">Étape 6 — ML</span>
+        <span class="node-title">Scoring & Décision</span>
+      </div>
+      <div style="margin-left:auto; display:flex; gap:8px">
+        <span class="badge badge-green">LogisticRegression</span>
+        <span class="badge badge-blue">SHAP linéaire</span>
+      </div>
+    </div>
+    <div class="node-body">
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div class="code-block">
+<span class="cm"># score_features(feat, age) → dict</span>
+X_s = scaler.<span class="fn">transform</span>(X)
+score = model.<span class="fn">predict_proba</span>(X_s)[<span class="nm">0</span>][<span class="nm">1</span>]
+
+<span class="cm"># SHAP linéaire : coef × x_scaled</span>
+shap_vals = coef * X_s[<span class="nm">0</span>]
+
+<span class="cm"># Seuil adaptatif junior < 30 ans</span>
+thr = thr_jr <span class="kw">if</span> age < <span class="nm">30</span> <span class="kw">else</span> threshold
+decision = <span class="str">"invite"</span> <span class="kw">if</span> score >= thr <span class="kw">else</span> <span class="str">"reject"</span>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div class="info-block">
+          <div class="info-block-label">Sorties</div>
+          <div class="data-tags">
+            <span class="tag highlight">score (0–1)</span>
+            <span class="tag highlight">decision</span>
+            <span class="tag highlight">threshold_used</span>
+            <span class="tag highlight">priority_rank</span>
+            <span class="tag highlight">shap_json</span>
+          </div>
+        </div>
+        <div class="info-block">
+          <div class="info-block-label">Exemple score</div>
+          <div class="score-meter" style="margin-top:8px">
+            <span style="font-size:.72rem;color:var(--muted);width:28px">73%</span>
+            <div class="meter-bar"><div class="meter-fill" style="--target-width:73%"></div></div>
+            <span class="badge badge-green">invite</span>
+          </div>
+          <div class="score-meter" style="margin-top:8px">
+            <span style="font-size:.72rem;color:var(--muted);width:28px">31%</span>
+            <div class="meter-bar"><div class="meter-fill" style="--target-width:31%;background:linear-gradient(90deg,#ef4444,#f97316)"></div></div>
+            <span class="badge badge-red">reject</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector"><div class="connector-line"><div class="connector-packet" style="animation-delay:.5s"></div></div></div>
+
+  <!-- ── STEP 7 : Persistance ── -->
+  <div class="node" style="animation-delay:.5s">
+    <div class="node-header">
+      <div class="node-icon icon-blue">🗄️</div>
+      <div>
+        <span class="node-step">Étape 7</span>
+        <span class="node-title">Persistance des données</span>
+      </div>
+      <span class="badge badge-blue" style="margin-left:auto">save_candidate()</span>
+    </div>
+
+    <div class="parallel-label">Stockage dual</div>
+    <div class="parallel-container">
+      <div class="node" style="animation-delay:.55s;border-color:rgba(99,102,241,.35)">
+        <div class="node-header">
+          <div class="node-icon icon-purple" style="width:34px;height:34px;font-size:16px">🐘</div>
+          <div>
+            <span class="node-step">Source de vérité</span>
+            <span class="node-title" style="font-size:.9rem">PostgreSQL / SQLite</span>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div class="info-block">
+            <div class="info-block-label">Table candidates</div>
+            <div class="data-tags">
+              <span class="tag">candidate_id</span>
+              <span class="tag">score</span>
+              <span class="tag">decision</span>
+              <span class="tag">shap_json</span>
+              <span class="tag highlight">cv_extra_json</span>
+              <span class="tag">stage_id</span>
+            </div>
+          </div>
+          <div class="info-block">
+            <div class="info-block-label">cv_extra_json (NEW)</div>
+            <div class="info-block-value" style="font-size:.7rem">
+              Skills · jobs · formation · langues · certifications — stockés une seule fois au scoring
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="node" style="animation-delay:.65s;border-color:rgba(245,158,11,.25)">
+        <div class="node-header">
+          <div class="node-icon icon-amber" style="width:34px;height:34px;font-size:16px">📊</div>
+          <div>
+            <span class="node-step">Fallback legacy</span>
+            <span class="node-title" style="font-size:.9rem">CSV candidates_live.csv</span>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div class="info-block">
+            <div class="info-block-label">Rétrocompatibilité</div>
+            <div class="info-block-value" style="font-size:.7rem">Pipeline ML batch · import migration · fallback si DB indisponible</div>
+          </div>
+          <div class="info-block">
+            <div class="info-block-label">Fusion API</div>
+            <div class="info-block-value" style="font-size:.7rem">GET /candidates merge DB + CSV, déduplique par candidate_id</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector"><div class="connector-line"><div class="connector-packet" style="animation-delay:.2s"></div></div></div>
+
+  <!-- ── STEP 8 : SSE Broadcast ── -->
+  <div class="node" style="animation-delay:.6s">
+    <div class="node-header">
+      <div class="node-icon icon-pink">📡</div>
+      <div>
+        <span class="node-step">Étape 8 — Temps réel</span>
+        <span class="node-title">SSE Broadcast</span>
+      </div>
+      <div style="margin-left:auto; display:flex; gap:8px">
+        <span class="badge badge-purple">Server-Sent Events</span>
+        <span class="badge badge-green">live</span>
+      </div>
+    </div>
+    <div class="node-body triple">
+      <div class="info-block">
+        <div class="info-block-label">Événement émis</div>
+        <div class="code-block" style="margin-top:6px">
+<span class="str">"candidate_scored"</span>
+{ score, decision,
+  name, candidate_id }
+        </div>
+      </div>
+      <div class="info-block">
+        <div class="info-block-label">Endpoint</div>
+        <div class="info-block-value"><code style="color:#a5b4fc">GET /events</code><br>Non protégé — EventSource ne supporte pas les headers custom</div>
+      </div>
+      <div class="info-block">
+        <div class="info-block-label">Autres événements</div>
+        <div class="data-tags">
+          <span class="tag">status_updated</span>
+          <span class="tag">candidate_deleted</span>
+          <span class="tag">stage_moved</span>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:12px">
+      <div class="demo-bar">
+        <span class="demo-label">→ tous les clients connectés</span>
+        <div class="demo-track" style="--accent:#ec4899"></div>
+        <span class="demo-val" style="color:#f9a8d4">push live</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector"><div class="connector-line"><div class="connector-packet" style="animation-delay:.8s"></div></div></div>
+
+  <!-- ── STEP 9 : Interface ATS ── -->
+  <div class="node" style="animation-delay:.7s">
+    <div class="node-header">
+      <div class="node-icon icon-green">🖥️</div>
+      <div>
+        <span class="node-step">Étape 9 — Interface RH</span>
+        <span class="node-title">Luminary ATS Dashboard</span>
+      </div>
+      <div style="margin-left:auto; display:flex; gap:8px">
+        <span class="badge badge-blue">React 19</span>
+        <span class="badge badge-amber">Vite + Tailwind</span>
+      </div>
+    </div>
+    <div class="output-grid">
+      <div class="output-card">
+        <div class="oc-icon">📋</div>
+        <div class="oc-label">Liste candidats</div>
+        <div class="oc-sub">Filtres · tri par score · search</div>
+      </div>
+      <div class="output-card">
+        <div class="oc-icon">🗂️</div>
+        <div class="oc-label">Kanban Pipeline</div>
+        <div class="oc-sub">Drag & drop · dnd-kit · stages</div>
+      </div>
+      <div class="output-card">
+        <div class="oc-icon">👤</div>
+        <div class="oc-label">Fiche candidat</div>
+        <div class="oc-sub">Skills · SHAP · scorecards · parcours</div>
+      </div>
+      <div class="output-card">
+        <div class="oc-icon">📊</div>
+        <div class="oc-label">Statistiques</div>
+        <div class="oc-sub">Répartition · tendances · équité</div>
+      </div>
+      <div class="output-card">
+        <div class="oc-icon">📅</div>
+        <div class="oc-label">Entretiens</div>
+        <div class="oc-sub">Calendrier · planification</div>
+      </div>
+      <div class="output-card">
+        <div class="oc-icon">⭐</div>
+        <div class="oc-label">Évaluations</div>
+        <div class="oc-sub">Scorecards 5 critères · 1–5 étoiles</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tech stack summary ── -->
+  <div style="margin-top:32px; background:var(--card); border:1px solid var(--border); border-radius:16px; padding:28px 32px">
+    <p style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:16px">Stack technique</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px">
+
+      <div class="info-block" style="text-align:center">
+        <div style="font-size:1.4rem;margin-bottom:4px">⚡</div>
+        <div class="info-block-label">API</div>
+        <div class="info-block-value" style="font-size:.75rem">FastAPI 0.115 + Uvicorn</div>
+      </div>
+      <div class="info-block" style="text-align:center">
+        <div style="font-size:1.4rem;margin-bottom:4px">🗄️</div>
+        <div class="info-block-label">ORM / DB</div>
+        <div class="info-block-value" style="font-size:.75rem">SQLAlchemy + PostgreSQL / SQLite</div>
+      </div>
+      <div class="info-block" style="text-align:center">
+        <div style="font-size:1.4rem;margin-bottom:4px">🧠</div>
+        <div class="info-block-label">LLM</div>
+        <div class="info-block-value" style="font-size:.75rem">Groq — llama-3.3-70b-versatile</div>
+      </div>
+      <div class="info-block" style="text-align:center">
+        <div style="font-size:1.4rem;margin-bottom:4px">📈</div>
+        <div class="info-block-label">ML</div>
+        <div class="info-block-value" style="font-size:.75rem">scikit-learn + MLflow + SHAP</div>
+      </div>
+      <div class="info-block" style="text-align:center">
+        <div style="font-size:1.4rem;margin-bottom:4px">⚛️</div>
+        <div class="info-block-label">Frontend</div>
+        <div class="info-block-value" style="font-size:.75rem">React 19 + Vite + Tailwind CSS</div>
+      </div>
+      <div class="info-block" style="text-align:center">
+        <div style="font-size:1.4rem;margin-bottom:4px">🐳</div>
+        <div class="info-block-label">Infra</div>
+        <div class="info-block-value" style="font-size:.75rem">Docker Compose + Caddy reverse proxy</div>
+      </div>
+      <div class="info-block" style="text-align:center">
+        <div style="font-size:1.4rem;margin-bottom:4px">🔁</div>
+        <div class="info-block-label">Automation</div>
+        <div class="info-block-value" style="font-size:.75rem">n8n webhooks + SSE realtime</div>
+      </div>
+      <div class="info-block" style="text-align:center">
+        <div style="font-size:1.4rem;margin-bottom:4px">🔐</div>
+        <div class="info-block-label">Auth</div>
+        <div class="info-block-value" style="font-size:.75rem">JWT Bearer · bcrypt · rôles admin/recruiter</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  Luminary ATS — Pipeline ML v2.1 &nbsp;·&nbsp; Généré automatiquement
+</footer>
+
+<!-- Démarrer les animations au scroll -->
+<script>
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.style.animationPlayState = 'running'
+      }
+    })
+  }, { threshold: 0.1 })
+
+  document.querySelectorAll('.node').forEach(n => {
+    n.style.animationPlayState = 'paused'
+    observer.observe(n)
+  })
+
+  // Re-trigger meter fills on scroll
+  const meterObs = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.querySelectorAll('.meter-fill').forEach(f => {
+          f.style.animation = 'none'
+          f.offsetHeight // reflow
+          f.style.animation = ''
+        })
+      }
+    })
+  }, { threshold: 0.3 })
+
+  document.querySelectorAll('.node').forEach(n => meterObs.observe(n))
+</script>
+
+</body>
+</html>
