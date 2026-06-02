@@ -10,6 +10,7 @@ RUN pip install --no-cache-dir -r req_api.txt -r req_ml.txt
 # Code source (après pip pour maximiser le layer cache)
 COPY api/ ./api/
 COPY pipeline_ml/ ./pipeline_ml/
+COPY docs/ ./docs/
 # models/ monté en volume — pas copié dans l'image
 
 EXPOSE 8000

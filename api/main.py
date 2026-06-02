@@ -13,7 +13,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, HTMLResponse
 
 from api.config import PROCESSED_DIR, RAW_TEXTS_DIR
 from api.database import init_db, get_db, User as UserModel
@@ -166,6 +166,16 @@ def _seed_admin():
                 logger.info(f"Admin créé : {admin_email}")
     except Exception as e:
         logger.warning(f"Seed admin failed: {e}")
+
+
+# ── Pipeline overview (public) ───────────────────────────────────────
+@app.get("/pipeline", tags=["docs"], include_in_schema=False)
+def pipeline_overview():
+    """Page HTML publique — visualisation du pipeline ML end-to-end."""
+    html_path = Path(__file__).parent.parent / "docs" / "pipeline_overview.html"
+    if not html_path.exists():
+        raise HTTPException(404, "pipeline_overview.html introuvable")
+    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 
 # ── Status ───────────────────────────────────────────────────────────
