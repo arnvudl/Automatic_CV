@@ -14,12 +14,16 @@ function initials(name) {
   return (name ?? '').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || '??'
 }
 
-function ScoreRing({ score }) {
+function ScoreRing({ score, decision, threshold }) {
   const pct = Math.round((score ?? 0) * 100)
-  const color = pct >= 75 ? '#16a34a' : pct >= 50 ? '#ca8a04' : '#dc2626'
-  const labelColor = pct >= 75 ? 'text-success' : pct >= 50 ? 'text-warning' : 'text-destructive'
-  const badgeBg = pct >= 75 ? 'bg-success/10 text-success' : pct >= 50 ? 'bg-warning/10 text-warning' : 'bg-destructive/10 text-destructive'
-  const badgeLabel = pct >= 75 ? 'TOP MATCH' : pct >= 50 ? 'GOOD MATCH' : 'LOW MATCH'
+  // Couleur basée sur la décision relative au seuil, pas le score absolu
+  const isInvited = decision === 'invite'
+  const isElim    = decision === 'eliminated'
+  const margin    = (score ?? 0) - (threshold ?? 0.5)
+  const color      = isElim ? '#64748b' : isInvited ? '#16a34a' : pct >= 40 ? '#ca8a04' : '#dc2626'
+  const labelColor = isElim ? 'text-muted-foreground' : isInvited ? 'text-success' : pct >= 40 ? 'text-warning' : 'text-destructive'
+  const badgeBg    = isElim ? 'bg-muted text-muted-foreground' : isInvited ? 'bg-success/10 text-success' : pct >= 40 ? 'bg-warning/10 text-warning' : 'bg-destructive/10 text-destructive'
+  const badgeLabel = isElim ? 'ÉLIMINÉ' : isInvited ? (margin >= 0.15 ? 'TOP MATCH' : 'MATCH') : pct >= 40 ? 'PROCHE SEUIL' : 'LOW MATCH'
   const offset = 125.6 * (1 - pct / 100)
   return (
     <div className="flex items-center gap-3">
@@ -265,7 +269,7 @@ export default function CandidateList({ onNavigate }) {
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4"><ScoreRing score={c.score} /></td>
+                      <td className="px-6 py-4"><ScoreRing score={c.score} decision={c.decision} threshold={c.threshold_used} /></td>
                       <td className="px-6 py-4 text-sm text-muted-foreground">{date}</td>
                       <td className="px-6 py-4">
                         <span className={`px-3 py-1 ${stage.color} rounded-full text-xs font-semibold flex items-center gap-1.5 w-fit`}>
