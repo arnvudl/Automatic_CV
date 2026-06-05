@@ -450,6 +450,58 @@
 
 <hr class="divider">
 
+<!-- ══════════════════════════════════════════════════════════ -->
+<!-- SHAP                                                      -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="bias-section">
+  <div class="section-header">
+    <div class="section-icon" style="background:rgba(99,102,241,.15)">🔬</div>
+    <div>
+      <div class="section-title">4. Importance des Features (SHAP)</div>
+      <div class="section-sub">Contribution moyenne de chaque feature au score — modèle v7</div>
+    </div>
+  </div>
+
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px 32px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+      <div>
+        <p style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:16px">Importance globale (|SHAP| moyen)</p>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div class="bar-row"><div class="bar-name" style="width:160px;font-size:.72rem">education_adj</div><div class="bar-track"><div class="bar-fill" style="background:linear-gradient(90deg,#7c3aed,#a78bfa)" data-w="23.92">23.9%</div></div></div>
+          <div class="bar-row"><div class="bar-name" style="width:160px;font-size:.72rem">career_depth</div><div class="bar-track"><div class="bar-fill" style="background:linear-gradient(90deg,#f59e0b,#fcd34d)" data-w="15.50">15.5%</div></div></div>
+          <div class="bar-row"><div class="bar-name" style="width:160px;font-size:.72rem">potential_score</div><div class="bar-track"><div class="bar-fill" style="background:linear-gradient(90deg,#22c55e,#86efac)" data-w="12.23">12.2%</div></div></div>
+          <div class="bar-row"><div class="bar-name" style="width:160px;font-size:.72rem">junior_potential</div><div class="bar-track"><div class="bar-fill" style="background:linear-gradient(90deg,#22c55e,#86efac)" data-w="10.07">10.1%</div></div></div>
+          <div class="bar-row"><div class="bar-name" style="width:160px;font-size:.72rem">avg_job_duration</div><div class="bar-track"><div class="bar-fill" style="background:linear-gradient(90deg,#f59e0b,#fcd34d)" data-w="9.08">9.1%</div></div></div>
+          <div class="bar-row"><div class="bar-name" style="width:160px;font-size:.72rem">has_multiple_languages</div><div class="bar-track"><div class="bar-fill" style="background:linear-gradient(90deg,#3b82f6,#93c5fd)" data-w="7.88">7.9%</div></div></div>
+          <div class="bar-row"><div class="bar-name" style="width:160px;font-size:.72rem">field_match</div><div class="bar-track"><div class="bar-fill" style="background:linear-gradient(90deg,#64748b,#94a3b8)" data-w="4.79">4.8%</div></div></div>
+          <div class="bar-row"><div class="bar-name" style="width:160px;font-size:.72rem">exp_per_year_of_age</div><div class="bar-track"><div class="bar-fill" style="background:linear-gradient(90deg,#ec4899,#f9a8d4)" data-w="3.85">3.9%</div></div></div>
+          <div class="bar-row"><div class="bar-name" style="width:160px;font-size:.72rem">is_it</div><div class="bar-track"><div class="bar-fill" style="background:linear-gradient(90deg,#64748b,#94a3b8)" data-w="3.47">3.5%</div></div></div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="info-block" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px">
+          <p style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#a78bfa;margin-bottom:6px">🎓 Biais académique</p>
+          <p style="font-size:.75rem;color:var(--text);line-height:1.6"><code style="color:#c4b5fd">education_adj</code> reste la feature la plus influente (23.9%). Biais Master vs Bachelor atténué mais non éliminé sans relabeling.</p>
+        </div>
+        <div class="info-block" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px">
+          <p style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#fcd34d;margin-bottom:6px">🌍 Proxy géographique</p>
+          <p style="font-size:.75rem;color:var(--text);line-height:1.6"><code style="color:#fcd34d">career_depth</code> + <code style="color:#fcd34d">avg_job_duration</code> = 24.6% d'importance. Vecteur indirect du biais pays (France −4.58, Portugal +4.16 vs moyenne).</p>
+        </div>
+        <div class="info-block" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px">
+          <p style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#86efac;margin-bottom:6px">🎂 Anti-biais âge</p>
+          <p style="font-size:.75rem;color:var(--text);line-height:1.6"><code style="color:#86efac">potential_score</code> + <code style="color:#86efac">junior_potential</code> = 22.3%. Valorisent les juniors à fort potentiel sans utiliser l'âge comme feature.</p>
+        </div>
+        <div class="info-block" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px">
+          <p style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#f9a8d4;margin-bottom:6px">⚧️ Fix genre</p>
+          <p style="font-size:.75rem;color:var(--text);line-height:1.6"><code style="color:#f9a8d4">exp_per_year_of_age</code> = 3.9% — faible importance globale mais décisif : remplace <code>years_experience</code> (SHAP=52% en v5) et supprime le biais carrières fragmentées.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr class="divider">
+
 <!-- Synthèse -->
 <div class="summary">
   <h2 style="text-align:center;font-size:1.5rem;font-weight:800;margin-bottom:32px;color:var(--text)">Synthèse</h2>

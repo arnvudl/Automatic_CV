@@ -31,12 +31,12 @@ adulte observé**, sans se fonder sur les labels biaisés.
 Le biais de genre n'existe pas dans les labels bruts, mais a été introduit puis
 corrigé par les choix de features successifs :
 
-| Version | Recall Femme | Recall Homme | Écart | Feature responsable |
-|---------|-------------|-------------|-------|-------------------|
-| Labels bruts | 18.9% (invite) | 21.0% (invite) | +2.1pp H>F | Décisions humaines — légèrement misandre |
-| **v5** | 59.1% | 55.2% | +3.9pp F>H | `years_experience` dominant → pénalise les carrières fragmentées → légèrement misogyne |
-| **v6** | 81.8% | 82.1% | +0.3pp H>F ≈ égal | `exp_per_year_of_age` remplace `years_experience` → quasi-parité |
-| **v7** | 90.9% | 83.9% | +7.0pp F>H | Correction parité démo âge → légèrement misandre |
+| Version | Recall Femme | Recall Homme | Écart | Feature responsable                                                                    |
+|---------|-------------|-------------|-------|----------------------------------------------------------------------------------------|
+| Labels bruts | 18.9% (invite) | 21.0% (invite) | +2.1pp H>F | Décisions humaines — légèrement misogyne                                               |
+| **v5** | 59.1% | 55.2% | +3.9pp F>H | `years_experience` dominant → pénalise les carrières fragmentées → légèrement misandre |
+| **v6** | 81.8% | 82.1% | +0.3pp H>F ≈ égal | `exp_per_year_of_age` remplace `years_experience` → quasi-parité                       |
+| **v7** | 90.9% | 83.9% | +7.0pp F>H | Correction parité démo âge → légèrement misandre                                       |
 
 ### Ce qui a corrigé le biais de genre : `exp_per_year_of_age`
 
@@ -148,6 +148,48 @@ seuil_junior = score minimal tel que P(score_junior ≥ seuil_junior) = 62.3%
 - Elle n'efface pas le biais historique dans les labels
 - Elle réduit l'écart de recall (32.2 pp → 4.5 pp) mais ne l'annule pas
 - Elle introduit un trade-off précision (documenté et accepté)
+
+---
+
+## 1c. Analyse SHAP — Importance des Features
+
+SHAP (SHapley Additive exPlanations) mesure la contribution de chaque feature
+au score individuel d'un candidat. Ci-dessous les valeurs d'importance globale
+(moyenne des |valeurs SHAP| sur le dataset de test) du modèle v7.
+
+### Importance globale des features
+
+| Rang | Feature | Importance SHAP | Rôle dans les biais |
+|------|---------|----------------|-------------------|
+| 1 | `education_adj` | **0.2392** | Biais académique — Master favorisé. Compressé (0.30/0.70) vs `education_level` brut (SHAP=0.52 en v1) pour réduire sur-pondération diplôme |
+| 2 | `career_depth` | **0.1550** | **Proxy géographique** — France/Portugal ont career_depth hors-norme. Non corrigible par seuil |
+| 3 | `potential_score` | **0.1223** | Anti-biais âge — valorise compétences/expérience, favorable aux juniors avec beaucoup de skills |
+| 4 | `junior_potential` | **0.1007** | Terme d'interaction IS_junior × potential_score — signal additionnel pour juniors à fort potentiel |
+| 5 | `avg_job_duration` | **0.0908** | Corrélé à career_depth — même proxy géographique indirect |
+| 6 | `has_multiple_languages` | **0.0788** | Légèrement favorable aux femmes (+6.5% F>H dans le dataset) |
+| 7 | `field_match` | **0.0479** | Adéquation formation/secteur — neutre sur biais démographiques |
+| 8 | `exp_per_year_of_age` | **0.0385** | **Fix genre** — remplace `years_experience`, neutralise le biais carrières fragmentées. Faible importance globale mais fort impact sur l'équité |
+| 9 | `is_it` | **0.0347** | Secteur IT — neutre, avantage structurel IT vs Finance déjà dans les labels |
+
+### Lecture des biais à travers SHAP
+
+**Biais d'âge :** `potential_score` (rang 3) et `junior_potential` (rang 4) ont été
+introduits spécifiquement pour valoriser les juniors à fort potentiel sans utiliser
+l'âge comme feature directe. Ensemble ils représentent **22.3% de l'importance totale**.
+
+**Biais de genre :** `exp_per_year_of_age` (rang 8, 3.85%) a un impact faible en
+importance globale mais décisif sur l'équité : c'est lui qui a cassé la dominance
+de `years_experience` (SHAP=0.52 en v5) et ramené l'écart genre de 3.9 pp à 0.3 pp.
+
+**Biais géographique :** `career_depth` (rang 2, 15.5%) et `avg_job_duration` (rang 5,
+9.1%) sont les vecteurs proxy des disparités géographiques. France et Portugal ont
+des career_depth atypiques (respectivement −4.58 et +4.16 vs moyenne) qui se
+traduisent en scores défavorables, sans que le pays soit une feature directe.
+
+> ⚠️ `education_adj` reste la feature la plus influente (23.9%). Le biais académique
+> (Master 30.1% vs Bachelor 12.7% d'invitation dans les labels) est atténué par
+> la compression de l'échelle mais pas éliminé. C'est le biais le plus difficile
+> à corriger sans relabeling humain des cas litigieux.
 
 ---
 
