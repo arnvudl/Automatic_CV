@@ -149,16 +149,24 @@ adulte observé**, sans se fonder sur les labels biaisés.
 | Nigeria | 0.733 | 0.733 | = |
 | France | 0.700 | 0.800 | +10.0 pp ✅ |
 
-> **Analyse :** Le recall géographique s'améliore pour 5 pays sur 10. Aucun pays
-> ne régresse. L'amélioration est plus marquée pour Irlande (+18.2 pp) et
-> Pays-Bas (+16.7 pp), probablement corrélée à une proportion de juniors plus
-> élevée dans ces groupes.
+> ⚠️ **Le biais géographique n'a pas été corrigé dans v7.**
 >
-> **Mécanisme indirect :** Le pays n'est pas une feature du modèle. Les disparités
-> géographiques observées sont des **biais indirects** (proxy bias) via des
-> corrélations avec l'expérience, le niveau d'éducation ou le secteur. Ce biais
-> proxy ne peut pas être corrigé par un ajustement de seuil — il nécessiterait
-> une intervention au niveau des features ou du dataset.
+> L'amélioration du recall pour 5 pays est un **effet de bord** de la correction
+> du biais d'âge (seuil junior abaissé), pas une correction ciblée.
+>
+> **Pourquoi aucune correction n'a été appliquée :**
+> - Aucun biais géographique statistiquement significatif dans les labels (all ns)
+> - Effectifs trop faibles (34–61 par pays) pour une parité démographique par pays
+>   statistiquement valide
+> - Le pays n'est pas une feature du modèle — le biais est indirect (proxy bias)
+>   via des corrélations avec l'expérience, l'éducation et le secteur
+>
+> **Ce qu'il faudrait pour le corriger :**
+> 1. Augmenter le dataset (> 100 candidats par pays minimum)
+> 2. Analyser les corrélations pays ↔ features pour identifier le vecteur proxy
+> 3. Appliquer une parité démographique par pays si les effectifs le permettent
+>
+> **Statut : surveillance active — correction reportée faute de données suffisantes.**
 
 ---
 
