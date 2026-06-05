@@ -487,14 +487,23 @@
 </footer>
 
 <script>
-  // Animate bars on scroll
+  // Animate bars on scroll — scale relative to max value within each card
   const obs = new IntersectionObserver((entries) => {
     entries.forEach(e => {
       if (e.isIntersecting) {
-        e.target.querySelectorAll('.bar-fill').forEach(bar => {
-          const w = bar.dataset.w
-          if (w) {
-            setTimeout(() => { bar.style.width = Math.min(parseFloat(w), 100) + '%' }, 100)
+        const bars = e.target.querySelectorAll('.bar-fill[data-w]')
+        if (!bars.length) { obs.unobserve(e.target); return }
+
+        // Find max value in this card for relative scaling
+        const vals = Array.from(bars).map(b => parseFloat(b.dataset.w) || 0)
+        const maxVal = Math.max(...vals)
+        const scale = maxVal > 0 ? 100 / maxVal : 1
+
+        bars.forEach(bar => {
+          const w = parseFloat(bar.dataset.w)
+          if (!isNaN(w)) {
+            const displayW = Math.min(w * scale, 100)
+            setTimeout(() => { bar.style.width = displayW + '%' }, 100)
           }
         })
         obs.unobserve(e.target)

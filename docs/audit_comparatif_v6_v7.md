@@ -51,9 +51,20 @@ adulte observé**, sans se fonder sur les labels biaisés.
 > légèrement en faveur des femmes (−7.0 pp), restant dans la zone acceptable (≤10 pp).
 > La baisse de précision est le coût direct de la correction de parité démographique.
 >
-> **Cause de l'amélioration :** Le seuil junior abaissé (0.326) bénéficie
-> proportionnellement plus aux femmes si elles sont surreprésentées parmi les juniors
-> dans ce dataset — à surveiller sur des données futures.
+> **Analyse de l'origine de l'écart (vérifié sur données) :**
+> La distribution juniors/adultes est quasi-identique entre genres :
+> Femmes 26.2% juniors, Hommes 26.6% juniors — la surreprésentation féminine
+> parmi les juniors n'explique PAS l'écart.
+>
+> Dans les labels bruts, les femmes juniors sont encore plus défavorisées que les hommes
+> juniors (taux invitation 4.9% vs 7.0%). La correction de parité démographique
+> bénéficie légèrement plus aux femmes adultes (23.8% invite rate) qu'aux hommes
+> adultes (26.0%), ce qui crée mécaniquement un léger avantage recall femmes.
+>
+> **L'écart de 7 pp n'est pas dû aux features ni à la composition age/genre
+> du dataset — il provient du taux d'invitation historique légèrement plus bas
+> pour les femmes adultes (23.8% vs 26.0%), qui se traduit par un seuil junior
+> proportionnellement plus favorable aux femmes.**
 
 ---
 
