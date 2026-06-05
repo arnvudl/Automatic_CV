@@ -24,9 +24,53 @@ adulte observé**, sans se fonder sur les labels biaisés.
 
 ---
 
-## 1. Biais de Genre — Avant / Après
+## 1. Biais de Genre — Évolution et Correction
 
-### Labels bruts (p05_label_audit — inchangé entre v6 et v7)
+### Chronologie du biais de genre à travers les versions
+
+Le biais de genre n'existe pas dans les labels bruts, mais a été introduit puis
+corrigé par les choix de features successifs :
+
+| Version | Recall Femme | Recall Homme | Écart | Feature responsable |
+|---------|-------------|-------------|-------|-------------------|
+| Labels bruts | 18.9% (invite) | 21.0% (invite) | +2.1pp H>F | Décisions humaines — légèrement misandre |
+| **v5** | 59.1% | 55.2% | +3.9pp F>H | `years_experience` dominant → pénalise les carrières fragmentées → légèrement misogyne |
+| **v6** | 81.8% | 82.1% | +0.3pp H>F ≈ égal | `exp_per_year_of_age` remplace `years_experience` → quasi-parité |
+| **v7** | 90.9% | 83.9% | +7.0pp F>H | Correction parité démo âge → légèrement misandre |
+
+### Ce qui a corrigé le biais de genre : `exp_per_year_of_age`
+
+**v5 utilisait `years_experience` comme feature principale (SHAP = 0.52 — dominant).**
+Cette feature pénalise toute personne ayant des interruptions de carrière, favorisant
+mécaniquement les profils avec une ancienneté brute élevée.
+
+**v6 a remplacé `years_experience` par `exp_per_year_of_age` :**
+```
+exp_per_year_of_age = years_experience / max(age - 22, 1)
+```
+Cette normalisation mesure l'expérience **relative à la durée de carrière théorique** :
+- Un candidat de 27 ans avec 5 ans d'exp → ratio = 5/5 = 1.0
+- Un candidat de 37 ans avec 5 ans d'exp → ratio = 5/15 = 0.33 (pénalisé)
+
+**Effet mesuré sur le dataset (vérifié) :**
+
+| Feature | Moy. Femmes | Moy. Hommes | Écart |
+|---------|------------|------------|-------|
+| `exp_per_year_of_age` | 0.652 | 0.601 | **+8.6% F>H** |
+| `has_multiple_languages` | 0.906 | 0.850 | +6.5% F>H |
+| `junior_potential` | 1.004 | 1.090 | −7.9% F<H |
+
+Les femmes du dataset ont un `exp_per_year_of_age` 8.6% plus élevé que les hommes.
+Ce n'est pas un choix délibéré : c'est la réalité du dataset. En remplaçant
+`years_experience` par `exp_per_year_of_age`, le modèle est passé de légèrement
+misogyne à quasi-paritaire (v6 : écart 0.3 pp).
+
+**L'écart résiduel v7 (+7.0 pp F>H)** vient de la correction de parité démographique
+pour l'âge : les femmes adultes ayant un taux d'invitation historique légèrement plus
+bas (23.8% vs 26.0% hommes), le seuil junior calculé par parité leur est
+proportionnellement plus favorable.
+
+### Labels bruts (p05_label_audit)
 
 | Groupe | N | Invités | Taux | Écart global | p-value | Significatif |
 |--------|---|---------|------|-------------|---------|-------------|
@@ -34,8 +78,7 @@ adulte observé**, sans se fonder sur les labels biaisés.
 | Female | 233 | 44 | 18.9% | −1.1% | 0.5601 | ns — neutre |
 
 > **Conclusion labels :** Aucun biais de genre statistiquement significatif dans les
-> décisions historiques des recruteurs. L'écart de 2.1 pp entre hommes et femmes
-> est non significatif (p=0.56).
+> décisions historiques (p=0.56).
 
 ### Performances du modèle
 
@@ -65,6 +108,46 @@ adulte observé**, sans se fonder sur les labels biaisés.
 > du dataset — il provient du taux d'invitation historique légèrement plus bas
 > pour les femmes adultes (23.8% vs 26.0%), qui se traduit par un seuil junior
 > proportionnellement plus favorable aux femmes.**
+
+---
+
+## 1b. Parité Démographique — Principe et Implémentation
+
+### Pourquoi pas Equal Opportunity ?
+
+L'approche intuitive pour corriger le biais d'âge serait **Equal Opportunity** :
+fixer le seuil junior pour que recall junior = recall adulte. Mais cette approche
+est invalide ici car les labels d'entraînement sont eux-mêmes biaisés (p<0.0001).
+
+Calibrer un seuil sur des labels biaisés revient à apprendre à reproduire le biais
+à une fréquence "acceptable". Les "vrais positifs" juniors dans le dataset sont déjà
+un sous-ensemble filtré par des recruteurs biaissés — les juniors exceptionnels qui
+ont surmonté le biais humain. Atteindre un recall égal sur ce sous-ensemble ne
+corrige pas le problème de fond.
+
+### La parité démographique (Feldman et al., 2015)
+
+**Principe :** fixer le seuil junior de sorte que le taux d'invitation junior
+**calculé par le modèle** égale le taux d'invitation adulte **observé dans les données**.
+
+```
+taux_adulte_observé = P(score_adulte ≥ seuil_adulte) = 62.3% (sur train)
+seuil_junior = score minimal tel que P(score_junior ≥ seuil_junior) = 62.3%
+             = top 62.3% des scores juniors triés par ordre décroissant
+             = 0.326
+```
+
+**Ce que cette approche garantit :**
+- Le seuil junior est **calculé automatiquement** à chaque ré-entraînement
+- Il ne repose **pas** sur les labels juniors (qui sont biaisés)
+- Il est entièrement déterminé par la distribution des scores et le comportement
+  adulte — deux grandeurs non biaisées par les décisions historiques anti-junior
+- Il est reproductible, auditable, et ancré dans la littérature de fairness
+
+**Ce que cette approche ne garantit pas :**
+- Elle n'efface pas le biais historique dans les labels
+- Elle réduit l'écart de recall (32.2 pp → 4.5 pp) mais ne l'annule pas
+- Elle introduit un trade-off précision (documenté et accepté)
 
 ---
 
@@ -160,10 +243,30 @@ adulte observé**, sans se fonder sur les labels biaisés.
 | Nigeria | 0.733 | 0.733 | = |
 | France | 0.700 | 0.800 | +10.0 pp ✅ |
 
-> ⚠️ **Le biais géographique n'a pas été corrigé dans v7.**
+> ⚠️ **Distinction essentielle : recall ≠ taux d'invitation**
 >
-> L'amélioration du recall pour 5 pays est un **effet de bord** de la correction
-> du biais d'âge (seuil junior abaissé), pas une correction ciblée.
+> Ce que v7 améliore : le **recall par pays** — ne pas rater les candidats
+> positifs qui existent dans les données (ex. Allemagne recall 91.7% → 100%).
+>
+> Ce que v7 ne corrige **pas** : l'**écart de taux d'invitation entre pays**.
+> Les Pays-Bas avaient 27.7% d'invitation dans les labels, l'Allemagne 8.8%.
+> Le modèle apprend à bien identifier ces 8.8% d'Allemands positifs — mais
+> l'écart de 18.9 pp avec les Pays-Bas reste entier dans les données sources.
+>
+> **Pour corriger le taux**, il faudrait appliquer la parité démographique par
+> pays : forcer le modèle à inviter les Allemands au même taux que les Néerlandais.
+> Cette correction n'a **pas** été appliquée pour deux raisons :
+>
+> 1. **Absence de biais prouvé dans les labels** (all ns, p>0.10) — les écarts
+>    de taux pourraient être du bruit statistique lié aux faibles effectifs
+>    (34–61 par pays), pas un biais systématique
+> 2. **Effectifs insuffisants** — avec 3 vrais positifs allemands sur 34,
+>    appliquer une parité démographique forcerait une égalisation statistiquement
+>    non fiable et potentiellement arbitraire
+>
+> **Conclusion géographique :** Le biais géographique reste une **limitation ouverte**.
+> Il nécessite d'abord une preuve statistique de biais dans les labels (p<0.05),
+> puis des effectifs suffisants (>100/pays) pour une correction valide.
 >
 > **Pourquoi aucune correction n'a été appliquée :**
 > - Aucun biais géographique statistiquement significatif dans les labels (all ns)
