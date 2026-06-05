@@ -2,21 +2,19 @@
 """
 send_demo_cvs.py
 ─────────────────
-Envoie un batch de CVs par jour vers l'inbox ATS (via testmail.app).
+Envoie un batch de CVs par jour directement vers l'API /score.
 Garde un historique pour ne jamais renvoyer le même CV.
 
 Usage :
-    python scripts/send_demo_cvs.py           # envoie le batch du jour (défaut: 15)
-    python scripts/send_demo_cvs.py --n 20    # envoie 20 CVs aujourd'hui
+    python scripts/send_demo_cvs.py           # envoie 15 CVs
+    python scripts/send_demo_cvs.py --n 20    # envoie 20 CVs
     python scripts/send_demo_cvs.py --dry-run # aperçu sans envoi
     python scripts/send_demo_cvs.py --status  # voir combien ont été envoyés
 
 Exemple pour arriver à 75 en 5 jours :
     Jour 1 (6 juin)  : python scripts/send_demo_cvs.py --n 15
     Jour 2 (7 juin)  : python scripts/send_demo_cvs.py --n 15
-    Jour 3 (8 juin)  : python scripts/send_demo_cvs.py --n 15
-    Jour 4 (9 juin)  : python scripts/send_demo_cvs.py --n 15
-    Jour 5 (10 juin) : python scripts/send_demo_cvs.py --n 15
+    ...
     → 75 candidats dans l'ATS, aucun doublon
 """
 
@@ -46,14 +44,11 @@ logging.basicConfig(
 log = logging.getLogger("demo_sender")
 
 # ── Config ───────────────────────────────────────────────────────────
-TESTMAIL_API_KEY  = os.getenv("TESTMAIL_API_KEY", "")
-TESTMAIL_NS       = os.getenv("TESTMAIL_NAMESPACE", "")
-ATS_INBOX         = f"{TESTMAIL_NS}.rh@inbox.testmail.app"
-FROM_EMAIL        = f"{TESTMAIL_NS}.demo@inbox.testmail.app"
-TESTMAIL_SEND_URL = "https://api.testmail.app/api/send"
+API_URL    = os.getenv("ATS_API_URL", "https://api.lony.app")
+SCORE_URL  = f"{API_URL}/score"
 
-RAW_DIR      = Path(__file__).parent.parent / "data" / "raw"
-STATE_FILE   = Path(__file__).parent.parent / "data" / "demo_sent.json"
+RAW_DIR    = Path(__file__).parent.parent / "data" / "raw"
+STATE_FILE = Path(__file__).parent.parent / "data" / "demo_sent.json"
 
 
 # ── Tracking ─────────────────────────────────────────────────────────
@@ -71,22 +66,19 @@ def save_state(state: dict):
 # ── Envoi ────────────────────────────────────────────────────────────
 
 def send_cv(cv_path: Path) -> bool:
-    content_b64 = base64.b64encode(cv_path.read_bytes()).decode()
     try:
-        r = requests.post(TESTMAIL_SEND_URL, json={
-            "apikey":    TESTMAIL_API_KEY,
-            "namespace": TESTMAIL_NS,
-            "to":        ATS_INBOX,
-            "from":      FROM_EMAIL,
-            "subject":   f"Candidature — {cv_path.stem}",
-            "text":      "Bonjour,\n\nVeuillez trouver mon CV en pièce jointe.\n\nCordialement",
-            "attachments": [{
-                "filename":    cv_path.name,
-                "content":     content_b64,
-                "contentType": "text/plain",
-            }],
-        }, timeout=15)
+        with cv_path.open("rb") as f:
+            r = requests.post(
+                SCORE_URL,
+                files={"file": (cv_path.name, f, "text/plain")},
+                timeout=30,
+            )
         r.raise_for_status()
+        result = r.json()
+        name     = result.get("name", "?")
+        decision = result.get("decision", "?")
+        score    = round((result.get("score") or 0) * 100)
+        log.info(f"     → {name} | {decision} | {score}%")
         return True
     except Exception as e:
         log.error(f"  ✗ {cv_path.name} : {e}")
@@ -115,10 +107,6 @@ def main():
         log.info(f"Fichiers : {', '.join(state['sent'][-5:])}{'...' if len(state['sent']) > 5 else ''}")
         return
 
-    if not TESTMAIL_API_KEY:
-        log.error("TESTMAIL_API_KEY manquant dans .env")
-        sys.exit(1)
-
     # CVs disponibles non encore envoyés
     all_cvs   = sorted(RAW_DIR.glob("*.txt"))
     already   = set(state["sent"])
@@ -129,7 +117,7 @@ def main():
         return
 
     to_send = remaining[:args.n]
-    log.info(f"{'[DRY-RUN] ' if args.dry_run else ''}Envoi de {len(to_send)} CVs → {ATS_INBOX}")
+    log.info(f"{'[DRY-RUN] ' if args.dry_run else ''}Envoi de {len(to_send)} CVs → {SCORE_URL}")
     log.info(f"Déjà envoyés : {state['total']} | Restants : {len(remaining)}")
     log.info("")
 
@@ -157,7 +145,7 @@ def main():
     log.info(f"{'Simulé' if args.dry_run else 'Envoyé'} : {sent} | Erreurs : {errors}")
     log.info(f"Total cumulé : {state['total']} CVs dans l'ATS")
     if not args.dry_run and sent > 0:
-        log.info(f"n8n traite les emails toutes les 2 min → visible dans l'ATS dans ~{sent * 2} min")
+        log.info(f"Candidats scorés et visibles immédiatement dans l'ATS.")
 
 
 if __name__ == "__main__":
