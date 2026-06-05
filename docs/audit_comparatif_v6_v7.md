@@ -262,13 +262,26 @@ traduisent en scores défavorables, sans que le pays soit une feature directe.
 | Portugal | 39 | 10.3% | −9.7% | 0.144 | ns |
 | Allemagne | 34 | 8.8% | −11.2% | 0.119 | ns |
 
-> **Conclusion labels :** Aucun biais géographique **statistiquement significatif**
-> dans les labels. Les écarts observés (jusqu'à 11 pp pour l'Allemagne) pourraient
-> être des artefacts du faible effectif par pays (34–61 candidats).
+> **⚠️ "ns" ≠ absence de biais — étude sous-puissante.**
 >
-> ⚠️ **Pattern à surveiller :** Nigeria, France, Portugal et Allemagne apparaissent
-> systématiquement en bas du classement. Bien que non significatif sur ce dataset,
-> ce pattern mérite une attention accrue si le volume de données augmente.
+> Les tests sont non significatifs non pas parce qu'il n'y a pas de biais, mais
+> parce qu'on n'a pas assez de données pour le détecter. Analyse de puissance
+> statistique (test bilatéral, α=0.05, puissance cible 80%) :
+>
+> | Pays | N dispo | Écart observé | N nécessaire | Ratio |
+> |------|---------|--------------|-------------|-------|
+> | Allemagne | 34 | −11.2 pp | **151** | ×4.4 manquant |
+> | Portugal | 39 | −9.7 pp | **211** | ×5.4 manquant |
+> | France | 51 | −8.2 pp | **308** | ×6.0 manquant |
+> | Nigeria | 61 | −8.1 pp | **317** | ×5.2 manquant |
+>
+> **Interprétation correcte :** Les écarts observés sont substantiels (jusqu'à −11.2 pp
+> pour l'Allemagne) mais les effectifs sont 4 à 6 fois trop faibles pour les détecter
+> à α=0.05. On ne peut pas conclure à l'absence de biais géographique — on ne dispose
+> pas de la puissance statistique pour le prouver ou l'infirmer.
+>
+> **Conclusion :** Le biais géographique est une **limitation ouverte et non résolue**.
+> Les résultats "ns" sont une limite des données, pas une preuve d'équité.
 
 ### Performances du modèle par pays — v6 vs v7
 
