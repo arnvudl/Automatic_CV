@@ -508,6 +508,8 @@ export default function CandidateProfile({ onNavigate, candidateId }) {
               {[
                 { label: 'Email',        value: candidate.email },
                 { label: 'Téléphone',    value: candidate.phone },
+                { label: 'Âge',          value: candidate.age != null ? `${candidate.age} ans` : null },
+                { label: 'Genre',        value: candidate.gender },
                 { label: 'Secteur',      value: candidate.sector },
                 { label: 'Rôle cible',   value: candidate.target_role },
                 { label: 'Expérience',   value: candidate.years_experience != null ? `${candidate.years_experience} ans` : null },

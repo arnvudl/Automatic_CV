@@ -72,25 +72,38 @@ def startup():
     logger.info("Base de données initialisée.")
 
 
-def _recompute_shap():
-    """Recalcule le SHAP pour les candidats en DB qui ont shap_json vide ou '{}'."""
+def _shap_is_empty_or_zero(shap_json_str: str) -> bool:
+    """Retourne True si shap_json est absent, vide, ou ne contient que des 0."""
+    if not shap_json_str or shap_json_str in ("{}", "null", ""):
+        return True
+    try:
+        import json as _j
+        d = _j.loads(shap_json_str)
+        return not d or all(v == 0.0 for v in d.values())
+    except Exception:
+        return True
+
+
+def _recompute_shap(force: bool = False):
+    """
+    Recalcule le SHAP pour les candidats en DB.
+    force=False → seulement ceux avec shap vide/nul/tous-à-zéro
+    force=True  → tous les candidats scorés (utile après un fix ML)
+    """
     from api.database import get_db, Candidate as CandidateModel
     from api.scoring import score_features, enrich_features
 
     try:
         with get_db() as db:
-            candidates = db.query(CandidateModel).filter(
-                (CandidateModel.shap_json == None) |
-                (CandidateModel.shap_json == "{}") |
-                (CandidateModel.shap_json == "")
-            ).all()
+            qry = db.query(CandidateModel).filter(CandidateModel.score != None)
+            candidates = qry.all()
 
             if not candidates:
-                return
+                return 0
 
             updated = 0
             for c in candidates:
-                if c.score is None:
+                if not force and not _shap_is_empty_or_zero(c.shap_json):
                     continue
                 try:
                     feat_row = {
@@ -98,22 +111,24 @@ def _recompute_shap():
                         "education_level":  float(c.education_level  or 0),
                         "sector":           c.sector or "",
                         "target_role":      c.target_role or "",
-                        "avg_job_duration": 0,   # non stocké, approximation
+                        "avg_job_duration": 0,
                         "career_depth":     0,
                     }
-                    feat_row   = enrich_features(feat_row, c.age)
-                    result     = score_features(feat_row, c.age)
-                    shap_json  = result.get("shap_json", "{}")
-                    if shap_json and shap_json != "{}":
+                    feat_row  = enrich_features(feat_row, c.age)
+                    result    = score_features(feat_row, c.age)
+                    shap_json = result.get("shap_json", "{}")
+                    if shap_json and shap_json not in ("{}", "null", ""):
                         c.shap_json = shap_json
                         updated += 1
                 except Exception:
                     pass
 
             if updated:
-                logger.info(f"SHAP recomputed pour {updated} candidat(s).")
+                logger.info(f"SHAP recomputed pour {updated} candidat(s) (force={force}).")
+            return updated
     except Exception as e:
         logger.warning(f"SHAP recomputation failed: {e}")
+        return 0
 
 
 def _migrate_csv_to_db():
@@ -166,6 +181,23 @@ def _seed_admin():
                 logger.info(f"Admin créé : {admin_email}")
     except Exception as e:
         logger.warning(f"Seed admin failed: {e}")
+
+
+# ── Admin : recalcul SHAP ────────────────────────────────────────────
+from api.auth import get_current_user as _get_current_user
+
+@app.post("/admin/recompute-shap", tags=["admin"])
+def admin_recompute_shap(
+    force: bool = False,
+    _user=Depends(_get_current_user),
+):
+    """
+    Recalcule le SHAP pour tous les candidats scorés.
+    force=false → seulement ceux avec SHAP vide ou tout-à-zéro.
+    force=true  → tous les candidats (après un fix du modèle ML).
+    """
+    updated = _recompute_shap(force=force)
+    return {"updated": updated, "force": force}
 
 
 # ── Pipeline overview (public) ───────────────────────────────────────
