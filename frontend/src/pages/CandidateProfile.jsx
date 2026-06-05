@@ -17,11 +17,18 @@ function initials(name) {
   return (name ?? '').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || '??'
 }
 
-function getScoreColors(score) {
+function getScoreColors(score, decision, threshold) {
   const pct = Math.round((score ?? 0) * 100)
-  if (pct >= 75) return { text: 'text-success',     bg: 'bg-success/10',     bar: '#16a34a', label: 'Top Match' }
-  if (pct >= 50) return { text: 'text-warning',     bg: 'bg-warning/10',     bar: '#ca8a04', label: 'Good Match' }
-  return              { text: 'text-destructive', bg: 'bg-destructive/10', bar: '#dc2626', label: 'Low Match' }
+  // La décision (relative au seuil) prime sur le score absolu
+  if (decision === 'invite') {
+    const margin = score - (threshold ?? 0.5)
+    if (margin >= 0.15) return { text: 'text-success', bg: 'bg-success/10', bar: '#16a34a', label: 'Top Match' }
+    return { text: 'text-success', bg: 'bg-success/10', bar: '#16a34a', label: 'Match' }
+  }
+  if (decision === 'eliminated') return { text: 'text-muted-foreground', bg: 'bg-muted', bar: '#64748b', label: 'Éliminé' }
+  // Rejeté : couleur selon score absolu
+  if (pct >= 40) return { text: 'text-warning',     bg: 'bg-warning/10',     bar: '#ca8a04', label: 'Proche seuil' }
+  return               { text: 'text-destructive', bg: 'bg-destructive/10', bar: '#dc2626', label: 'Low Match' }
 }
 
 function ShapBar({ label, value }) {
@@ -134,7 +141,7 @@ export default function CandidateProfile({ onNavigate, candidateId }) {
   )
 
   const pct    = Math.round((candidate.score ?? 0) * 100)
-  const colors = getScoreColors(candidate.score)
+  const colors = getScoreColors(candidate.score, candidate.decision, candidate.threshold_used)
   const ini    = initials(candidate.name)
   const date   = candidate.received_at
     ? new Date(candidate.received_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
