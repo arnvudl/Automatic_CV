@@ -5,7 +5,21 @@ Changements vs v1 :
     education_adj (compressed scale : Bachelor=0.30, Master=0.70)
   - potential_per_year ajouté (GCA proxy — vitesse d'apprentissage junior)
   - Grid Search CV ajouté : optimise C, penalty, solver sur AUC-ROC (5-fold stratifié)
-Seuils   : adultes (F1-optimal) et juniors (recall >= 0.55) calculés sur train
+
+Seuils (v3 — Demographic Parity) :
+  - Adultes (30+) : seuil F1-optimal sur le sous-groupe adulte.
+  - Juniors (<30)  : seuil calculé par parité démographique (Feldman et al., 2015).
+                     Objectif : taux d'invitation junior = taux d'invitation adulte.
+                     Justification : les labels d'entraînement reflètent des décisions
+                     humaines historiquement biaisées contre les profils jeunes.
+                     Calibrer le seuil junior sur ces labels biaiserait le seuil
+                     dans le même sens (Equal Opportunity sur labels biaisés ≠ équité).
+                     La parité démographique contourne ce biais en ne se fondant pas
+                     sur les labels pour fixer le seuil junior, mais sur le comportement
+                     observé du modèle sur le groupe adulte (groupe de référence).
+                     Ce choix est un post-processing éthiquement défendable, documenté,
+                     reproductible et auditable (AI Act Annex IV).
+
 Sorties  : model.pkl, scaler.pkl, feature_cols.pkl, threshold.pkl,
            threshold_junior.pkl — métriques loggées dans MLflow
 """
@@ -19,7 +33,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKFold
 from sklearn.metrics import (
-    classification_report, roc_auc_score, precision_recall_curve, f1_score
+    classification_report, roc_auc_score, precision_recall_curve, f1_score, recall_score
 )
 import mlflow
 import mlflow.sklearn
@@ -67,12 +81,28 @@ def best_threshold_f1(y_true, y_proba):
     return float(t[np.argmax(f1[:-1])])
 
 
-def best_threshold_recall(y_true, y_proba, recall_target=0.55):
-    p, r, t = precision_recall_curve(y_true, y_proba)
-    valid = r[:-1] >= recall_target
-    if valid.any():
-        return float(t[valid][np.argmax(p[:-1][valid])])
-    return best_threshold_f1(y_true, y_proba)
+def threshold_demographic_parity(y_proba_junior, adult_invite_rate: float) -> float:
+    """
+    Calcule le seuil junior par parité démographique (Feldman et al., 2015).
+
+    Principe : le seuil est le score minimal tel que le taux d'invitation
+    des juniors soit égal au taux d'invitation observé chez les adultes.
+    Ce calcul ne dépend pas des labels juniors (qui sont biaisés) mais
+    uniquement de la distribution des scores et du taux de référence adulte.
+
+    Args:
+        y_proba_junior   : scores du modèle sur le sous-groupe junior (train).
+        adult_invite_rate: taux d'invitation adulte = P(ŷ=1 | adulte).
+
+    Returns:
+        Seuil (float) tel que P(score >= seuil | junior) ≈ adult_invite_rate.
+    """
+    if len(y_proba_junior) == 0:
+        return 0.5  # fallback si aucun junior dans le train
+    sorted_probas = np.sort(y_proba_junior)[::-1]  # décroissant
+    n_to_invite   = max(1, int(np.ceil(len(sorted_probas) * adult_invite_rate)))
+    idx           = min(n_to_invite - 1, len(sorted_probas) - 1)
+    return float(sorted_probas[idx])
 
 
 def main():
@@ -151,11 +181,21 @@ def main():
     y_proba_tr = model.predict_proba(X_tr)[:, 1]
     y_proba_te = model.predict_proba(X_te)[:, 1]
 
-    # Seuils différenciés âge
+    # ── Seuils différenciés âge (Demographic Parity) ─────────────────
     adult_mask = jr_train == 0
-    thr_adult  = best_threshold_f1(y_train[adult_mask], y_proba_tr[adult_mask])
     jr_mask    = jr_train == 1
-    thr_junior = best_threshold_recall(y_train[jr_mask], y_proba_tr[jr_mask])
+
+    # Seuil adulte : F1-optimal sur le sous-groupe adulte
+    thr_adult = best_threshold_f1(y_train[adult_mask], y_proba_tr[adult_mask])
+
+    # Taux d'invitation adulte au seuil F1-optimal (référence pour la parité)
+    adult_invite_rate = float(np.mean(y_proba_tr[adult_mask] >= thr_adult))
+
+    # Seuil junior : parité démographique — invite les top-N% juniors,
+    # N étant le taux d'invitation adulte (sans se fonder sur les labels biaisés)
+    thr_junior = threshold_demographic_parity(y_proba_tr[jr_mask], adult_invite_rate)
+
+    print(f"Taux invitation adulte (référence) : {adult_invite_rate:.1%}")
 
     y_pred = np.where(jr_test == 1,
                       (y_proba_te >= thr_junior).astype(int),
