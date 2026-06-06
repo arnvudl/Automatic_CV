@@ -204,7 +204,7 @@ def admin_recompute_shap(
 @app.get("/pipeline", tags=["docs"], include_in_schema=False)
 def pipeline_overview():
     """Page HTML publique — visualisation du pipeline ML end-to-end."""
-    html_path = Path(__file__).parent.parent / "docs" / "pipeline_overview.html"
+    html_path = Path(__file__).parent.parent / "docs" / "presentation" / "pipeline_overview.html"
     if not html_path.exists():
         raise HTTPException(404, "pipeline_overview.html introuvable")
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
