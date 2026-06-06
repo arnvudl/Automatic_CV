@@ -73,6 +73,9 @@ class Candidate(Base):
     # Pipeline Kanban
     stage_id          = Column(String(64),  nullable=True)   # étape courante (réf PipelineStage.stage_id)
 
+    # Localisation
+    location          = Column(String(255), nullable=True)   # "City, Country"
+
     # Données CV enrichies (skills, langues, certifs, résumé)
     cv_extra_json     = Column(Text,        nullable=True)   # JSON: {summary, skills_tech, skills_meth, skills_mgmt, languages, certifications}
 
@@ -185,3 +188,5 @@ def init_db():
             conn.execute(text("ALTER TABLE candidates ADD COLUMN stage_id VARCHAR(64)"))
         if "cv_extra_json" not in existing:
             conn.execute(text("ALTER TABLE candidates ADD COLUMN cv_extra_json TEXT"))
+        if "location" not in existing:
+            conn.execute(text("ALTER TABLE candidates ADD COLUMN location VARCHAR(255)"))

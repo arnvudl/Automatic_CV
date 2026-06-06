@@ -211,6 +211,7 @@ def save_candidate(record: dict):
                     phone=record.get("phone"),
                     gender=record.get("gender"),
                     age=record.get("age"),
+                    location=record.get("location"),
                     sector=record.get("sector"),
                     target_role=record.get("target_role"),
                     years_experience=record.get("years_experience"),

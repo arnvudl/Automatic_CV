@@ -312,6 +312,7 @@ async def score_cv(file: UploadFile = File(...)):
         "received_at":     datetime.now().isoformat(),
         "source_filename": file.filename,
         **{k: id_row.get(k) for k in ["name", "email", "phone", "gender", "age"]},
+        "location": ", ".join(filter(None, [id_row.get("city"), id_row.get("country")])) or None,
         **{k: feat_row.get(k) for k in ["sector", "target_role", "years_experience", "education_level"]},
         **result,
         "status":        "inbox",
