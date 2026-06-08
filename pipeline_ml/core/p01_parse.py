@@ -374,7 +374,10 @@ et retourne UNIQUEMENT un JSON valide avec la structure suivante. Ne mets aucun 
   "languages": [
     {"name": "English", "level": "C1"}
   ],
-  "certifications": ["AWS Certified", "PMP", ...]
+  "certifications": ["AWS Certified", "PMP", ...],
+  "city": "ville ou null",
+  "country": "pays ou null",
+  "summary": "résumé professionnel ou objectif en 2-3 phrases, ou null"
 }
 
 Règles :
@@ -383,6 +386,11 @@ Règles :
 - Pour les dates de jobs, estime si tu vois seulement l'année (ex: "2020" → "2020-01")
 - Le niveau de langue doit être A1/A2/B1/B2/C1/C2 ou Native/Fluent si non précisé
 - target_role : déduis-le du titre le plus récent ou de l'objectif affiché
+- city / country : cherche dans la section contact/adresse (ex: "Liège, Belgique" → city: "Liège", country: "Belgique").
+  Si le pays est absent mais la ville est connue, déduis le pays.
+- summary : reconstitue le texte du profil ou de l'objectif professionnel, même s'il est fragmenté
+  par la mise en colonnes. C'est souvent le paragraphe qui décrit les compétences clés et l'objectif.
+  Ne mets pas de titre de section ("PROFIL", "Professional Summary") dans le résumé.
 - IMPORTANT : le texte peut venir d'un PDF multi-colonnes et sembler fragmenté.
   Le nom complet est souvent parmi les 10 premiers mots du texte, parfois sur deux lignes.
   Utilise aussi l'adresse email comme indice (ex: "arnaudleroy20@gmail.com" → "Arnaud Leroy").
@@ -430,12 +438,15 @@ def parse_cv_llm(text: str, labels_dict: dict = None, filename: str = "") -> tup
     data = json.loads(match.group())
 
     # ── Identity ────────────────────────────────────────────────────
-    name   = data.get("name")
-    gender = data.get("gender")
-    dob    = data.get("dob")
-    email  = data.get("email")
-    phone  = data.get("phone")
-    age    = _calculate_age(dob) if dob else None
+    name    = data.get("name")
+    gender  = data.get("gender")
+    dob     = data.get("dob")
+    email   = data.get("email")
+    phone   = data.get("phone")
+    city    = data.get("city")
+    country = data.get("country")
+    summary = data.get("summary") or ""
+    age     = _calculate_age(dob) if dob else None
 
     stem   = Path(filename).stem if filename else str(uuid.uuid4())
     cv_id  = str(uuid.uuid5(uuid.NAMESPACE_DNS, stem or str(uuid.uuid4())))
@@ -539,9 +550,11 @@ def parse_cv_llm(text: str, labels_dict: dict = None, filename: str = "") -> tup
         "phone":           phone,
         "gender":          gender,
         "age":             age,
+        "city":            city,
+        "country":         country,
         # Données enrichies pour stockage DB (cv_extra_json)
         "_cv_extra": {
-            "summary": "",
+            "summary": summary,
             "skills_tech":    skills.get("technical")  or [],
             "skills_meth":    skills.get("methods")    or [],
             "skills_mgmt":    skills.get("management") or [],
