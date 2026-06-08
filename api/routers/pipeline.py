@@ -191,8 +191,11 @@ def get_stages(job_id: str):
 # ── GET /jobs/{job_id}/candidates ─────────────────────────────────────
 @router.get("/jobs/{job_id}/candidates")
 def get_job_candidates(job_id: str):
-    """Retourne les candidats explicitement assignés à cette offre
-    (via leur stage_id préfixé par le job_id), avec le nom de leur étape."""
+    """Retourne tous les candidats visibles dans le pipeline de cette offre :
+    ceux explicitement assignés à une étape, ainsi que les candidats non
+    assignés mais dont le rôle cible correspond au titre du poste — affichés
+    automatiquement dans la colonne Inbox du Kanban (badge "Nouveau").
+    Reflète exactement le total affiché sur la carte de l'offre."""
     try:
         with get_db() as db:
             stages = (
@@ -212,10 +215,36 @@ def get_job_candidates(job_id: str):
                 .order_by(CandidateModel.score.desc())
                 .all()
             )
-            return [
+            result = [
                 {**_candidate_brief(c), "stage_name": stage_names.get(c.stage_id)}
                 for c in assigned
             ]
+
+            # + candidats non assignés mais pertinents pour ce poste
+            # (même logique que l'auto-population de l'Inbox côté Kanban)
+            inbox_stage = min(stages, key=lambda s: s.position) if stages else None
+            if inbox_stage:
+                job = db.query(JobModel).filter(JobModel.job_id == job_id).first()
+                job_title = job.title if job else None
+                unassigned = (
+                    db.query(CandidateModel)
+                    .filter(CandidateModel.stage_id.is_(None))
+                    .filter(CandidateModel.decision != "eliminated")
+                    .order_by(CandidateModel.received_at.desc())
+                    .limit(200)
+                    .all()
+                )
+                matching = [c for c in unassigned if _title_matches(job_title, c.target_role)]
+                result += [
+                    {
+                        **_candidate_brief(c),
+                        "stage_name": inbox_stage.name,
+                        "unassigned": True,
+                    }
+                    for c in matching[:100]
+                ]
+
+            return result
     except Exception as e:
         logger.error(f"Error getting candidates for job {job_id}: {e}")
         raise HTTPException(500, "Erreur lors de la récupération des candidats.")

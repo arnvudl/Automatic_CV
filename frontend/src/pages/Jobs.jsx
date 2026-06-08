@@ -219,7 +219,18 @@ export default function Jobs({ onNavigate }) {
 
   useEffect(() => {
     getJobs()
-      .then(setJobs)
+      .then(jobsData => {
+        setJobs(jobsData)
+        // Précharge la liste des candidats de chaque offre — le compteur
+        // "Candidats" affiché sur la carte doit refléter le total réel
+        // du pipeline (assignés + auto-détectés en Inbox), pas un
+        // compteur statique potentiellement désynchronisé.
+        jobsData.forEach(j => {
+          getJobCandidates(j.job_id)
+            .then(data => setJobCandidates(prev => ({ ...prev, [j.job_id]: data })))
+            .catch(() => {})
+        })
+      })
       .catch(() => setJobs([]))
       .finally(() => setLoading(false))
   }, [])
@@ -253,7 +264,10 @@ export default function Jobs({ onNavigate }) {
     }
   }
 
-  const totalApplicants = jobs.reduce((s, j) => s + (j.applicants_count || 0), 0)
+  const totalApplicants = jobs.reduce((s, j) => {
+    const real = jobCandidates[j.job_id]
+    return s + (Array.isArray(real) ? real.length : (j.applicants_count || 0))
+  }, 0)
   const activeJobs      = jobs.filter(j => j.status === 'active').length
   const withScore       = jobs.filter(j => j.avg_score != null)
   const avgScore        = withScore.length > 0
@@ -388,7 +402,11 @@ export default function Jobs({ onNavigate }) {
                       <Icon name={expandedJobId === job.job_id ? 'expand_less' : 'expand_more'} size={14}
                         className="text-muted-foreground group-hover/cand:text-foreground transition-colors" />
                     </div>
-                    <p className="text-2xl font-bold text-foreground">{job.applicants_count ?? 0}</p>
+                    <p className="text-2xl font-bold text-foreground">
+                      {Array.isArray(jobCandidates[job.job_id])
+                        ? jobCandidates[job.job_id].length
+                        : (job.applicants_count ?? 0)}
+                    </p>
                   </button>
                   <div className="bg-muted rounded-lg p-4">
                     <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Score IA</p>
@@ -411,7 +429,7 @@ export default function Jobs({ onNavigate }) {
                     )}
                     {Array.isArray(jobCandidates[job.job_id]) && (
                       jobCandidates[job.job_id].length === 0 ? (
-                        <p className="text-xs text-muted-foreground px-1 py-2">Aucun candidat assigné à cette offre pour l'instant.</p>
+                        <p className="text-xs text-muted-foreground px-1 py-2">Aucun candidat pour cette offre pour l'instant.</p>
                       ) : (
                         <ul className="space-y-1">
                           {jobCandidates[job.job_id].map(c => (
@@ -420,7 +438,15 @@ export default function Jobs({ onNavigate }) {
                                 onClick={() => onNavigate?.('profile', c.candidate_id)}
                                 className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md hover:bg-card text-left transition-colors group/c">
                                 <div className="min-w-0">
-                                  <p className="text-sm font-semibold text-foreground truncate group-hover/c:underline">{c.name || 'Candidat sans nom'}</p>
+                                  <div className="flex items-center gap-1.5">
+                                    <p className="text-sm font-semibold text-foreground truncate group-hover/c:underline">{c.name || 'Candidat sans nom'}</p>
+                                    {c.unassigned && (
+                                      <span className="flex-shrink-0 text-[8px] font-bold uppercase tracking-wider px-1 py-0.5 rounded bg-foreground/10 text-foreground"
+                                        title="Candidat scoré, pas encore assigné à cette offre">
+                                        Nouveau
+                                      </span>
+                                    )}
+                                  </div>
                                   <p className="text-[11px] text-muted-foreground truncate">{c.stage_name || '—'}{c.target_role ? ` · ${c.target_role}` : ''}</p>
                                 </div>
                                 {c.score != null && (
