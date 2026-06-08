@@ -6,5 +6,6 @@ shap
 python-dotenv
 groq
 mlflow
-pdfplumber
+pymupdf        # extraction PDF multi-colonnes (prioritaire sur pdfplumber)
+pdfplumber     # fallback PDF
 python-docx

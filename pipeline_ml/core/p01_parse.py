@@ -25,7 +25,36 @@ except ImportError:
 # EXTRACTION TEXTE SELON FORMAT
 # ==============================================================
 
+def _fix_letter_spacing(text: str) -> str:
+    """Collapse 'C o m p u t e r' → 'Computer' (lettre-spacing PDF decoratif)."""
+    return re.sub(
+        r'(?<!\w)([A-Za-z] ){2,}[A-Za-z](?!\w)',
+        lambda m: m.group().replace(' ', ''),
+        text,
+    )
+
+
 def _extract_text_pdf(filepath: Path) -> str:
+    # ── Tentative 1 : PyMuPDF (meilleur sur les PDFs multi-colonnes) ──
+    try:
+        import fitz  # pymupdf
+        doc = fitz.open(str(filepath))
+        pages_text = []
+        for page in doc:
+            # Extraction par blocs triés : d'abord par bande verticale (y/30),
+            # puis par position horizontale → respecte l'ordre de lecture naturel.
+            blocks = page.get_text("blocks")
+            blocks.sort(key=lambda b: (round(b[1] / 30), b[0]))
+            page_text = "\n".join(b[4].strip() for b in blocks if b[4].strip())
+            pages_text.append(page_text)
+        text = "\n".join(pages_text)
+        text = _fix_letter_spacing(text)
+        if len(text.strip()) > 100:
+            return text
+    except Exception as e:
+        print(f"  [pymupdf] Extraction échouée sur {filepath.name} : {e}")
+
+    # ── Tentative 2 : pdfplumber (fallback) ────────────────────────────
     try:
         import pdfplumber
         with pdfplumber.open(filepath) as pdf:
@@ -34,8 +63,8 @@ def _extract_text_pdf(filepath: Path) -> str:
             return text
     except Exception as e:
         print(f"  [pdfplumber] Extraction échouée sur {filepath.name} : {e}")
-    # Texte insuffisant → signal pour fallback (Phase 3 : GLM-OCR)
-    print(f"  [WARN] PDF graphique détecté : {filepath.name} — texte insuffisant, OCR recommandé (Phase 3)")
+
+    print(f"  [WARN] PDF graphique détecté : {filepath.name} — texte insuffisant, OCR recommandé")
     return ""
 
 
@@ -354,6 +383,10 @@ Règles :
 - Pour les dates de jobs, estime si tu vois seulement l'année (ex: "2020" → "2020-01")
 - Le niveau de langue doit être A1/A2/B1/B2/C1/C2 ou Native/Fluent si non précisé
 - target_role : déduis-le du titre le plus récent ou de l'objectif affiché
+- IMPORTANT : le texte peut venir d'un PDF multi-colonnes et sembler fragmenté.
+  Le nom complet est souvent parmi les 10 premiers mots du texte, parfois sur deux lignes.
+  Utilise aussi l'adresse email comme indice (ex: "arnaudleroy20@gmail.com" → "Arnaud Leroy").
+  Ne mets PAS de mots comme "PROFIL", "CONTACT", "CV", "SECTION" dans le champ "name".
 
 CV :
 \"\"\"
