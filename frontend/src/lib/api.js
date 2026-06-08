@@ -122,6 +122,9 @@ export const deleteScorecard  = (scorecardId) => request(`/scorecards/${scorecar
 export const getPipelineStages = (jobId) =>
   request(`/jobs/${jobId}/stages`)
 
+export const getJobCandidates = (jobId) =>
+  request(`/jobs/${jobId}/candidates`)
+
 export const createPipelineStage = (jobId, data) =>
   request(`/jobs/${jobId}/stages`, { method: 'POST', body: JSON.stringify(data) })
 

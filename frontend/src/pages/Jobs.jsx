@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Icon } from '../components/Icon'
-import { getJobs, createJob, updateJob, deleteJob } from '../lib/api'
+import { getJobs, createJob, updateJob, deleteJob, getJobCandidates } from '../lib/api'
 import { Toast } from '../components/Toast'
 
 const STAGE_LABEL = {
@@ -176,14 +176,35 @@ function JobModal({ job, onSave, onClose }) {
   )
 }
 
-export default function Jobs() {
+export default function Jobs({ onNavigate }) {
   const [jobs, setJobs]           = useState([])
   const [loading, setLoading]     = useState(true)
   const [modal, setModal]         = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [toast, setToast]         = useState(null)
 
+  // Liste des candidats par offre (lazy-loaded à l'expansion)
+  const [expandedJobId, setExpandedJobId]   = useState(null)
+  const [jobCandidates, setJobCandidates]   = useState({})   // { job_id: [...] | 'loading' | 'error' }
+
   const showToast = (message, type = 'success') => setToast({ message, type })
+
+  const toggleCandidates = async (jobId) => {
+    if (expandedJobId === jobId) {
+      setExpandedJobId(null)
+      return
+    }
+    setExpandedJobId(jobId)
+    if (!jobCandidates[jobId]) {
+      setJobCandidates(prev => ({ ...prev, [jobId]: 'loading' }))
+      try {
+        const data = await getJobCandidates(jobId)
+        setJobCandidates(prev => ({ ...prev, [jobId]: data }))
+      } catch {
+        setJobCandidates(prev => ({ ...prev, [jobId]: 'error' }))
+      }
+    }
+  }
 
   useEffect(() => {
     getJobs()
@@ -347,11 +368,17 @@ export default function Jobs() {
                 </p>
                 <p className={`text-xs font-semibold mb-5 ${sm.color}`}>{sm.label}</p>
 
-                <div className={`grid grid-cols-2 gap-3 mb-6 ${isDraft ? 'grayscale' : ''}`}>
-                  <div className="bg-muted rounded-lg p-4">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Candidats</p>
+                <div className={`grid grid-cols-2 gap-3 mb-3 ${isDraft ? 'grayscale' : ''}`}>
+                  <button
+                    onClick={() => toggleCandidates(job.job_id)}
+                    className="bg-muted rounded-lg p-4 text-left hover:bg-muted/70 transition-colors group/cand">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Candidats</p>
+                      <Icon name={expandedJobId === job.job_id ? 'expand_less' : 'expand_more'} size={14}
+                        className="text-muted-foreground group-hover/cand:text-foreground transition-colors" />
+                    </div>
                     <p className="text-2xl font-bold text-foreground">{job.applicants_count ?? 0}</p>
-                  </div>
+                  </button>
                   <div className="bg-muted rounded-lg p-4">
                     <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Score IA</p>
                     <p className={`text-2xl font-bold ${job.avg_score != null ? ScoreColor(job.avg_score) : 'text-muted-foreground'}`}>
@@ -359,6 +386,49 @@ export default function Jobs() {
                     </p>
                   </div>
                 </div>
+
+                {expandedJobId === job.job_id && (
+                  <div className="mb-3 bg-muted/50 border border-border rounded-lg p-3 max-h-56 overflow-y-auto">
+                    {jobCandidates[job.job_id] === 'loading' && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground py-2 px-1">
+                        <div className="w-3.5 h-3.5 border-2 border-border border-t-foreground rounded-full animate-spin" />
+                        Chargement…
+                      </div>
+                    )}
+                    {jobCandidates[job.job_id] === 'error' && (
+                      <p className="text-xs text-destructive px-1 py-2">Erreur de chargement.</p>
+                    )}
+                    {Array.isArray(jobCandidates[job.job_id]) && (
+                      jobCandidates[job.job_id].length === 0 ? (
+                        <p className="text-xs text-muted-foreground px-1 py-2">Aucun candidat assigné à cette offre pour l'instant.</p>
+                      ) : (
+                        <ul className="space-y-1">
+                          {jobCandidates[job.job_id].map(c => (
+                            <li key={c.candidate_id}>
+                              <button
+                                onClick={() => onNavigate?.('profile', c.candidate_id)}
+                                className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md hover:bg-card text-left transition-colors group/c">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-semibold text-foreground truncate group-hover/c:underline">{c.name || 'Candidat sans nom'}</p>
+                                  <p className="text-[11px] text-muted-foreground truncate">{c.stage_name || '—'}{c.target_role ? ` · ${c.target_role}` : ''}</p>
+                                </div>
+                                {c.score != null && (
+                                  <span className={`flex-shrink-0 text-xs font-bold px-2 py-0.5 rounded-full ${
+                                    c.decision === 'invite' ? 'bg-success/10 text-success'
+                                    : c.decision === 'eliminated' ? 'bg-muted text-muted-foreground'
+                                    : 'bg-warning/10 text-warning'
+                                  }`}>
+                                    {Math.round(c.score * 100)}%
+                                  </span>
+                                )}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )
+                    )}
+                  </div>
+                )}
 
                 <div className="mt-auto">
                   <div className="flex justify-between items-end mb-1.5">

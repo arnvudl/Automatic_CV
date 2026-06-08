@@ -4,6 +4,7 @@ routers/pipeline.py — Kanban pipeline : étapes par offre + déplacement candi
 Endpoints :
   GET  /jobs/{job_id}/stages        → étapes du pipeline (crée les defaults si vide)
   POST /jobs/{job_id}/stages        → crée une étape custom
+  GET  /jobs/{job_id}/candidates    → liste des candidats assignés à cette offre
   PATCH /candidates/{id}/stage      → déplace un candidat vers une étape
 """
 
@@ -103,7 +104,7 @@ def get_stages(job_id: str):
                     .all()
                 )
 
-            # Uniquement les candidats explicitement assignés à ce job
+            # Candidats explicitement assignés à ce job
             valid_stage_ids = {s.stage_id for s in stages}
             assigned = (
                 db.query(CandidateModel)
@@ -112,11 +113,62 @@ def get_stages(job_id: str):
             )
             cand_briefs = [_candidate_brief(c) for c in assigned]
 
+            # La première colonne (Inbox) accueille aussi automatiquement
+            # les candidats scorés mais pas encore assignés à un pipeline —
+            # prêts à être glissés dans les étapes suivantes.
+            inbox_stage = min(stages, key=lambda s: s.position) if stages else None
+            if inbox_stage:
+                unassigned = (
+                    db.query(CandidateModel)
+                    .filter(CandidateModel.stage_id.is_(None))
+                    .filter(CandidateModel.decision != "eliminated")
+                    .order_by(CandidateModel.received_at.desc())
+                    .limit(100)
+                    .all()
+                )
+                cand_briefs += [
+                    {**_candidate_brief(c), "stage_id": inbox_stage.stage_id, "unassigned": True}
+                    for c in unassigned
+                ]
+
             return [_stage_to_dict(s, cand_briefs) for s in stages]
 
     except Exception as e:
         logger.error(f"Error getting stages for job {job_id}: {e}")
         raise HTTPException(500, "Erreur lors de la récupération des étapes.")
+
+
+# ── GET /jobs/{job_id}/candidates ─────────────────────────────────────
+@router.get("/jobs/{job_id}/candidates")
+def get_job_candidates(job_id: str):
+    """Retourne les candidats explicitement assignés à cette offre
+    (via leur stage_id préfixé par le job_id), avec le nom de leur étape."""
+    try:
+        with get_db() as db:
+            stages = (
+                db.query(StageModel)
+                .filter(StageModel.job_id == job_id)
+                .order_by(StageModel.position)
+                .all()
+            )
+            stage_names = {s.stage_id: s.name for s in stages}
+            valid_stage_ids = list(stage_names.keys())
+            if not valid_stage_ids:
+                return []
+
+            assigned = (
+                db.query(CandidateModel)
+                .filter(CandidateModel.stage_id.in_(valid_stage_ids))
+                .order_by(CandidateModel.score.desc())
+                .all()
+            )
+            return [
+                {**_candidate_brief(c), "stage_name": stage_names.get(c.stage_id)}
+                for c in assigned
+            ]
+    except Exception as e:
+        logger.error(f"Error getting candidates for job {job_id}: {e}")
+        raise HTTPException(500, "Erreur lors de la récupération des candidats.")
 
 
 # ── POST /jobs/{job_id}/stages ────────────────────────────────────────

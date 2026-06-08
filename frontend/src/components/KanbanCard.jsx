@@ -70,7 +70,15 @@ export function KanbanCard({ candidate, onNavigate, onRemove, overlay = false })
           {ini}
         </div>
         <div className="flex-1 min-w-0 pr-4">
-          <p className="text-xs font-semibold text-foreground truncate leading-tight">{candidate.name ?? 'Anonyme'}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-xs font-semibold text-foreground truncate leading-tight">{candidate.name ?? 'Anonyme'}</p>
+            {candidate.unassigned && (
+              <span className="flex-shrink-0 text-[8px] font-bold uppercase tracking-wider px-1 py-0.5 rounded bg-foreground/10 text-foreground"
+                title="Candidat scoré, pas encore assigné à cette offre — glissez-le pour l'assigner">
+                Nouveau
+              </span>
+            )}
+          </div>
           <p className="text-[10px] text-muted-foreground truncate">{candidate.target_role ?? candidate.sector ?? '—'}</p>
         </div>
         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${sc.cls}`}>
