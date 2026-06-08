@@ -8,6 +8,7 @@ Endpoints :
   PATCH /candidates/{id}/stage      → déplace un candidat vers une étape
 """
 
+import re
 import uuid
 import logging
 from typing import Optional
@@ -16,10 +17,54 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 
 from api.auth import get_current_user
-from api.database import get_db, PipelineStage as StageModel, Candidate as CandidateModel
+from api.database import get_db, PipelineStage as StageModel, Candidate as CandidateModel, Job as JobModel
 
 router = APIRouter(tags=["pipeline"], dependencies=[Depends(get_current_user)])
 logger = logging.getLogger("cv_api")
+
+# ── Matching titre de poste ↔ rôle cible candidat ─────────────────────
+_STOP_WORDS = {
+    "the", "a", "an", "of", "and", "et", "de", "du", "le", "la", "les",
+    "senior", "junior", "lead", "sr", "sr.", "jr", "jr.", "i", "ii", "iii", "iv",
+}
+_RE_WORD = re.compile(r"[a-zàâäéèêëïîôöùûüÿæœç]+")
+
+
+def _significant_words(title: str) -> list[str]:
+    return [w for w in _RE_WORD.findall(title.lower()) if len(w) > 2 and w not in _STOP_WORDS]
+
+
+def _title_matches(job_title: Optional[str], candidate_role: Optional[str]) -> bool:
+    """Heuristique 'regex-like' : tous les mots significatifs du titre de poste
+    doivent apparaître (par préfixe, façon stemming léger) dans le rôle cible
+    du candidat. Évite par ex. qu'une offre 'Data Analyst' affiche un
+    'Data Scientist' (mot 'data' commun mais 'analyst' absent)."""
+    if not job_title or not candidate_role:
+        return False
+    words = _significant_words(job_title)
+    cr = candidate_role.lower()
+    if not words:
+        return job_title.lower().strip() in cr
+    return all(re.search(re.escape(w[:5]), cr) for w in words)
+
+
+@router.get("/candidates/meta/target-roles")
+def get_target_roles():
+    """Retourne la liste des rôles cibles distincts présents dans les CVs —
+    utilisée pour l'autocomplétion du champ 'Titre du poste' à la création d'une offre."""
+    try:
+        with get_db() as db:
+            rows = (
+                db.query(CandidateModel.target_role)
+                .filter(CandidateModel.target_role.isnot(None))
+                .distinct()
+                .all()
+            )
+            roles = sorted({r[0].strip() for r in rows if r[0] and r[0].strip()})
+            return roles
+    except Exception as e:
+        logger.error(f"Error getting target roles: {e}")
+        return []
 
 # ── Étapes par défaut ─────────────────────────────────────────────────
 DEFAULT_STAGES = [
@@ -115,20 +160,25 @@ def get_stages(job_id: str):
 
             # La première colonne (Inbox) accueille aussi automatiquement
             # les candidats scorés mais pas encore assignés à un pipeline —
-            # prêts à être glissés dans les étapes suivantes.
+            # prêts à être glissés dans les étapes suivantes. On ne montre
+            # que ceux dont le rôle cible correspond au titre de l'offre,
+            # pour éviter de mélanger des profils de métiers différents.
             inbox_stage = min(stages, key=lambda s: s.position) if stages else None
             if inbox_stage:
+                job = db.query(JobModel).filter(JobModel.job_id == job_id).first()
+                job_title = job.title if job else None
                 unassigned = (
                     db.query(CandidateModel)
                     .filter(CandidateModel.stage_id.is_(None))
                     .filter(CandidateModel.decision != "eliminated")
                     .order_by(CandidateModel.received_at.desc())
-                    .limit(100)
+                    .limit(200)
                     .all()
                 )
+                matching = [c for c in unassigned if _title_matches(job_title, c.target_role)]
                 cand_briefs += [
                     {**_candidate_brief(c), "stage_id": inbox_stage.stage_id, "unassigned": True}
-                    for c in unassigned
+                    for c in matching[:100]
                 ]
 
             return [_stage_to_dict(s, cand_briefs) for s in stages]

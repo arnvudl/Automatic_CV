@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Icon } from '../components/Icon'
-import { getJobs, createJob, updateJob, deleteJob, getJobCandidates } from '../lib/api'
+import { getJobs, createJob, updateJob, deleteJob, getJobCandidates, getTargetRoles } from '../lib/api'
 import { Toast } from '../components/Toast'
 
 const STAGE_LABEL = {
@@ -49,6 +49,13 @@ function JobModal({ job, onSave, onClose }) {
     avg_score:        job.avg_score != null ? String(job.avg_score) : '',
   } : { ...EMPTY_FORM })
   const [saving, setSaving] = useState(false)
+  const [targetRoles, setTargetRoles] = useState([])
+
+  // Suggestions d'autocomplétion pour le titre du poste, basées sur les
+  // rôles cibles déjà détectés dans les CVs reçus (régex côté API).
+  useEffect(() => {
+    getTargetRoles().then(setTargetRoles).catch(() => setTargetRoles([]))
+  }, [])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -91,7 +98,11 @@ function JobModal({ job, onSave, onClose }) {
             <label className={labelCls}>Titre du poste *</label>
             <input value={form.title} onChange={e => set('title', e.target.value)}
               placeholder="ex. Développeur Full-Stack Senior"
+              list="job-title-suggestions"
               className={inputCls} required />
+            <datalist id="job-title-suggestions">
+              {targetRoles.map(r => <option key={r} value={r} />)}
+            </datalist>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

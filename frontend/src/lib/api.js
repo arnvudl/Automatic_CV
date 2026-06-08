@@ -125,6 +125,9 @@ export const getPipelineStages = (jobId) =>
 export const getJobCandidates = (jobId) =>
   request(`/jobs/${jobId}/candidates`)
 
+export const getTargetRoles = () =>
+  request('/candidates/meta/target-roles')
+
 export const createPipelineStage = (jobId, data) =>
   request(`/jobs/${jobId}/stages`, { method: 'POST', body: JSON.stringify(data) })
 
