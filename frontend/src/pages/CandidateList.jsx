@@ -53,8 +53,16 @@ export default function CandidateList({ onNavigate }) {
   const [scoreFilter, setScoreFilter]     = useState('all')
   const [sectorFilter, setSectorFilter]   = useState('all')
   const [decisionFilter, setDecisionFilter] = useState('all')
+  const [search, setSearch]               = useState('')
+  const [sortCol, setSortCol]             = useState('date')
+  const [sortDir, setSortDir]             = useState('desc')
   const [deleting, setDeleting]           = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
+
+  const toggleSort = (col) => {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortCol(col); setSortDir('asc') }
+  }
 
   useEffect(() => {
     getCandidates({ limit: 100 })
@@ -74,15 +82,32 @@ export default function CandidateList({ onNavigate }) {
 
   const sectors = [...new Set(candidates.map(c => c.sector).filter(Boolean))]
 
-  const filtered = candidates.filter(c => {
-    const pct = Math.round((c.score ?? 0) * 100)
-    if (scoreFilter === 'high' && pct < 75)  return false
-    if (scoreFilter === 'mid'  && (pct < 50 || pct >= 75)) return false
-    if (scoreFilter === 'low'  && pct >= 50) return false
-    if (sectorFilter !== 'all' && c.sector !== sectorFilter) return false
-    if (decisionFilter !== 'all' && c.decision !== decisionFilter) return false
-    return true
-  })
+  const filtered = candidates
+    .filter(c => {
+      const pct = Math.round((c.score ?? 0) * 100)
+      if (scoreFilter === 'high' && pct < 75)  return false
+      if (scoreFilter === 'mid'  && (pct < 50 || pct >= 75)) return false
+      if (scoreFilter === 'low'  && pct >= 50) return false
+      if (sectorFilter !== 'all' && c.sector !== sectorFilter) return false
+      if (decisionFilter !== 'all' && c.decision !== decisionFilter) return false
+      if (search.trim()) {
+        const q = search.trim().toLowerCase()
+        const haystack = [c.name, c.email, c.target_role, c.sector, c.location].join(' ').toLowerCase()
+        if (!haystack.includes(q)) return false
+      }
+      return true
+    })
+    .sort((a, b) => {
+      let av, bv
+      if (sortCol === 'name')     { av = (a.name ?? '').toLowerCase(); bv = (b.name ?? '').toLowerCase() }
+      else if (sortCol === 'score') { av = a.score ?? 0; bv = b.score ?? 0 }
+      else if (sortCol === 'date')  { av = a.received_at ?? ''; bv = b.received_at ?? '' }
+      else if (sortCol === 'decision') { av = a.decision ?? ''; bv = b.decision ?? '' }
+      else return 0
+      if (av < bv) return sortDir === 'asc' ? -1 : 1
+      if (av > bv) return sortDir === 'asc' ? 1 : -1
+      return 0
+    })
 
   const counts = {
     high: candidates.filter(c => Math.round((c.score ?? 0) * 100) >= 75).length,
@@ -216,6 +241,22 @@ export default function CandidateList({ onNavigate }) {
               </span>
             </div>
           </div>
+          {/* Search bar */}
+          <div className="relative">
+            <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Nom, email, poste…"
+              className="pl-9 pr-4 py-2 text-sm bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-foreground/20 w-56 placeholder:text-muted-foreground"
+            />
+            {search && (
+              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                <Icon name="close" size={14} />
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="bg-card border border-border rounded-xl overflow-hidden shadow-card">
@@ -237,9 +278,26 @@ export default function CandidateList({ onNavigate }) {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-muted/50 border-b border-border">
-                  {['Candidat', 'Score IA', 'Date', 'Décision', ''].map(h => (
-                    <th key={h} className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-wider first:pl-8 last:pr-8 last:text-right">
-                      {h}
+                  {[
+                    { label: 'Candidat',  col: 'name' },
+                    { label: 'Score IA',  col: 'score' },
+                    { label: 'Date',      col: 'date' },
+                    { label: 'Décision',  col: 'decision' },
+                    { label: '',          col: null },
+                  ].map(({ label, col }) => (
+                    <th key={label}
+                      onClick={col ? () => toggleSort(col) : undefined}
+                      className={`px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-wider first:pl-8 last:pr-8 last:text-right
+                        ${col ? 'cursor-pointer select-none hover:text-foreground transition-colors' : ''}`}>
+                      {col ? (
+                        <span className="inline-flex items-center gap-1">
+                          {label}
+                          <span className="flex flex-col leading-none text-[9px]">
+                            <span className={sortCol === col && sortDir === 'asc'  ? 'text-foreground' : 'opacity-30'}>▲</span>
+                            <span className={sortCol === col && sortDir === 'desc' ? 'text-foreground' : 'opacity-30'}>▼</span>
+                          </span>
+                        </span>
+                      ) : label}
                     </th>
                   ))}
                 </tr>
