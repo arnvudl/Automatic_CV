@@ -122,8 +122,11 @@ npm run dev   # → http://localhost:5173
 - Pas de state management externe (React Context suffit)
 - Séparation RGPD stricte : `identities.csv` jamais passé au modèle
 
-## Roadmap active
+## Documentation
 
-- `docs/roadmap.md` — roadmap ML (phases 1-5)
-- `docs/mlops_and_ocr_roadmap.md` — MLflow, DVC, GLM-OCR, LLM parsing
-- `docs/roadmap_frontend.md` — 7 phases ATS (Kanban, Scorecards, IA co-pilot…)
+- `README.md` — point d'entrée : architecture, démo, lancement, résultats du modèle
+- `docs/audit/audit_comparatif_v6_v7.md` — audit fairness détaillé (genre/âge/pays), justification v6→v7
+- `docs/audit/documentation_technique_ai_act.md` — conformité EU AI Act
+- `docs/project/mlops_and_ocr_roadmap.md` — roadmap MLOps (MLflow ✅, parsing LLM ✅, GLM-OCR 📅, DVC 📅)
+- `models/HISTORY.md` — historique des versions du modèle (v1 → v7)
+- `reports/RAPPORT_FINAL_ML.md` — rapport de synthèse du modèle

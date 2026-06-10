@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 send_demo_cvs.py
+python scripts/send_demo_cvs.py --n 35
 ─────────────────
 Envoie un batch de CVs par jour directement vers l'API /score.
 Garde un historique pour ne jamais renvoyer le même CV.
